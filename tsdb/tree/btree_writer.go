@@ -35,13 +35,13 @@ func (w *Writer) encode() []byte {
 	switch qType := q.(type) {
 	case *x:
 		//has internal node
-		writeInt(writer, HasChildrenNode)
+		writeByte(writer, HasChildrenNode)
 		//Extract the longest common prefix for each node
 		w.extractLcpByInternalNode(1, qType)
 		w.serializeInternalNode(1, qType)
 	case *d:
 		//only leaf node
-		writeInt(writer, NoChildrenNode)
+		writeByte(writer, NoChildrenNode)
 		//Extract the longest common prefix for leaf node
 		commonPrefix, _ := w.extractLcpByLeafNode(1, qType)
 		w.serializeLeafNode(1, qType, commonPrefix)
@@ -58,7 +58,6 @@ func (w *Writer) encode() []byte {
 	sort.Ints(highs)
 	writeInt(writer, len(highs))
 
-	// To perform the opertion you want
 	for _, high := range highs {
 		//write level
 		writeInt(writer, high)
@@ -78,68 +77,72 @@ func (w *Writer) encode() []byte {
 //Write the longest common prefix first,
 //and then write the node information including the starting position of the next layer.
 func (w *Writer) serializeInternalNode(currentHigh int, parentNode *x) int {
-	internal := w.getOrCreateByteBuf(currentHigh)
-	start := internal.Len()
+	internalWriter := w.getOrCreateByteBuf(currentHigh)
+	start := internalWriter.Len()
 
 	var nextHigh = currentHigh + 1
-	var hasParent = false
 	currentCommonPrefix := extractLcpByNodes(parentNode)
 
 	//write nodes
-	writeInt(internal, parentNode.c+1)
+	writeInt(internalWriter, parentNode.c+1)
 	//write lcp
-	writeInt(internal, len(currentCommonPrefix))
+	writeInt(internalWriter, len(currentCommonPrefix))
 	if len(currentCommonPrefix) > 0 {
-		writeBytes(internal, currentCommonPrefix)
+		writeBytes(internalWriter, currentCommonPrefix)
 	}
 
+	bodyWriter := newByteBuff()
+	//used in binary search
+	headerWriter := newByteBuff()
+
 	for i := 0; i < parentNode.c+1; i++ {
-		childNode := &parentNode.x[i]
+		writeInt(headerWriter, bodyWriter.Len())
+
 		var startPos int
+		childNode := &parentNode.x[i]
+		internalNode := childNode.ch
 
-		var internalKey []byte
-		if nil != childNode.k {
-			//used in lookup
-			writeInt(internal, HasParent)
-			hasParent = true
-			internalKey = childNode.k.([]byte)
-		} else {
-			writeInt(internal, NoParent)
-			hasParent = false
-		}
-
-		cc := childNode.ch
-
-		switch cType := cc.(type) {
+		switch cType := internalNode.(type) {
 		case *x:
-			//internal node
+			//no-leaf node
 			startPos = w.serializeInternalNode(nextHigh, cType)
 		case *d:
 			//leaf node
 			startPos = w.serializeLeafNode(nextHigh, cType, childNode.lcp)
 		}
-		//write suffix
-		if hasParent {
+
+		if nil != childNode.k {
+			//used in lookup
+			writeByte(bodyWriter, HasParent)
+			//write suffix
+			internalKey := childNode.k.([]byte)
 			suffix := internalKey[len(currentCommonPrefix):]
 			suffixLen := len(suffix)
-			writeInt(internal, suffixLen)
+			writeInt(bodyWriter, suffixLen)
 			if suffixLen > 0 {
-				writeBytes(internal, suffix)
+				writeBytes(bodyWriter, suffix)
 			}
 		} else {
-			noParentLastKey := childNode.lastKey
-			noParentSuffix := noParentLastKey[len(currentCommonPrefix):]
-			writeInt(internal, len(noParentSuffix))
+			writeByte(bodyWriter, NoParent)
+			//write suffix
+			noParentKey := childNode.lastKey
+			noParentSuffix := noParentKey[len(currentCommonPrefix):]
+			writeInt(bodyWriter, len(noParentSuffix))
 			if len(noParentSuffix) > 0 {
-				writeBytes(internal, noParentSuffix)
+				writeBytes(bodyWriter, noParentSuffix)
 			}
 		}
-		writeInt(internal, startPos)
+		writeInt(bodyWriter, startPos)
 	}
+	writeInt(internalWriter, headerWriter.Len())
+	writeBytes(internalWriter, headerWriter.Bytes())
+	//encoded := snappy.Encode(nil, bodyWriter.Bytes())
+	writeBytes(internalWriter, bodyWriter.Bytes())
 	return start
 }
 
-func extractLcpByNodes(parentNode *x) (currentCommonPrefix []byte) {
+//Extract the longest common prefix inside the node
+func extractLcpByNodes(parentNode *x) (longestCommonPrefix []byte) {
 	var keyArray [][]byte
 	for i := 0; i <= parentNode.c; i++ {
 		internalNode := parentNode.x[i]
@@ -149,9 +152,9 @@ func extractLcpByNodes(parentNode *x) (currentCommonPrefix []byte) {
 			keyArray = append(keyArray, internalNode.lastKey)
 		}
 	}
-	currentCommonPrefix = lcpByte(keyArray)
-	//fmt.Println("currentHigh:[", currentHigh, "]--nodes:[", parentNode.c+1, "]---commonPrefix--[", string(currentCommonPrefix), "]")
-	return currentCommonPrefix
+	longestCommonPrefix = lcpByte(keyArray)
+	//fmt.Println("currentHigh:[", currentHigh, "]--nodes:[", parentNode.c+1, "]---commonPrefix--[", string(longestCommonPrefix), "]")
+	return longestCommonPrefix
 }
 
 //Write the longest common prefix of the leaf node first, then write the value information.
@@ -164,7 +167,6 @@ func (w *Writer) serializeLeafNode(currentHigh int, dType *d, leafCommonPrefix [
 	dataWriter := newByteBuff()
 
 	var leafNodes int
-
 	for i := 0; i < dType.c+1; i++ {
 		if nil != dType.d[i].k {
 			pair := dType.d[i]
@@ -188,9 +190,10 @@ func (w *Writer) serializeLeafNode(currentHigh int, dType *d, leafCommonPrefix [
 		writeBytes(leafWriter, leafCommonPrefix)
 	}
 	//write offset
-	//writeInt(leafWriter, offsetWriter.Len())
-	//writeBytes(leafWriter, offsetWriter.Bytes())
+	writeInt(leafWriter, offsetWriter.Len())
+	writeBytes(leafWriter, offsetWriter.Bytes())
 	//write k-v
+	//encoded := snappy.Encode(nil, dataWriter.Bytes())
 	writeBytes(leafWriter, dataWriter.Bytes())
 	return start
 }
@@ -202,7 +205,7 @@ func (w *Writer) extractLcpByInternalNode(high int, parentNode *x) (commonPrefix
 	var internalCommonPrefix []byte //The longest common prefix with the same parent node
 	var nextHigh = high + 1         //The next layer of tree height
 
-	var keyArray [][]byte //
+	var keyArray [][]byte
 	for i := 0; i <= parentNode.c; i++ {
 		var hasParent = false // Whether the current node has a parent node
 		childNode := &parentNode.x[i]
@@ -215,31 +218,22 @@ func (w *Writer) extractLcpByInternalNode(high int, parentNode *x) (commonPrefix
 		}
 
 		children := childNode.ch
-		var childCommonPrefix []byte
+		var commonPrefix, endKey []byte
 		switch cType := children.(type) {
 		case *x:
-			// internal node
-			commonPrefix, internalLastKey := w.extractLcpByInternalNode(nextHigh, cType)
-			childCommonPrefix = commonPrefix
-			//
-			if !hasParent {
-				childNode.lastKey = internalLastKey
-				lastKey = internalLastKey
-				keyArray = append(keyArray, lastKey)
-			}
-
+			//no-leaf node
+			commonPrefix, endKey = w.extractLcpByInternalNode(nextHigh, cType)
 		case *d:
 			//leaf node
-			commonPrefix, leafLastKey := w.extractLcpByLeafNode(nextHigh, cType)
-			childCommonPrefix = commonPrefix
-
-			if !hasParent {
-				childNode.lastKey = leafLastKey
-				lastKey = leafLastKey
-				keyArray = append(keyArray, leafLastKey)
-			}
+			commonPrefix, endKey = w.extractLcpByLeafNode(nextHigh, cType)
 		}
-		childNode.lcp = childCommonPrefix
+		//no-parent
+		if !hasParent {
+			childNode.lastKey = endKey
+			lastKey = endKey
+			keyArray = append(keyArray, lastKey)
+		}
+		childNode.lcp = commonPrefix
 	}
 	internalCommonPrefix = lcpByte(keyArray)
 	return internalCommonPrefix, lastKey
@@ -257,19 +251,19 @@ func (w *Writer) extractLcpByLeafNode(i int, leafNode *d) (commonPrefix, lastKey
 	//longest common prefix
 	commonPrefix = lcpByte(keyArray)
 
+	//Remove the longest common prefix
 	for i := 0; i <= leafNode.c; i++ {
 		pair := leafNode.d[i]
 		if nil != pair.k {
 			suffix := (pair.k.([]byte))[len(commonPrefix):]
 			lastKey = pair.k.([]byte)
-			//Remove the longest common prefix
 			leafNode.d[i].k = suffix
 		}
 	}
 	return commonPrefix, lastKey
 }
 
-
+//Get the current height of the byte buffer
 func (w *Writer) getOrCreateByteBuf(high int) *bytes.Buffer {
 	buf := w.internalBuf[high]
 	if nil == buf {
@@ -287,9 +281,10 @@ func newByteBuff() *bytes.Buffer {
 func writeInt(buf *bytes.Buffer, v int) {
 	n := binary.PutUvarint(scratch[:], uint64(v))
 	writeBytes(buf, scratch[:n])
-	//bs := make([]byte, 4)
-	//binary.BigEndian.PutUint32(bs, uint32(v))
-	//writeBytes(buf, bs)
+}
+
+func writeByte(buf *bytes.Buffer, c byte) {
+	buf.WriteByte(c)
 }
 
 func writeBytes(buf *bytes.Buffer, b []byte) {

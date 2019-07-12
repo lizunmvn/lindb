@@ -12,7 +12,7 @@ import (
 
 const (
 	kx = 32 //Number of keywords for non-leaf nodes
-	kd = 32 //Number of keywords for leaf nodes
+	kd = 64 //Number of keywords for leaf nodes
 )
 
 func init() {

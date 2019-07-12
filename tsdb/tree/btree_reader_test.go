@@ -3,62 +3,12 @@ package tree
 import (
 	"fmt"
 	"math/rand"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
-	"runtime/pprof"
 	"testing"
 	"time"
 	"unsafe"
 )
 
 const Record = 1000000
-
-func Test_Profile(t *testing.T) {
-	r := TreeNew(bytesCompare)
-
-	for i := 0; i < Record; i++ {
-		r.Set([]byte(fmt.Sprintf("%s%d", "key-", i)), i)
-	}
-
-	encoder := NewEncoder(r)
-	bufs := encoder.encode()
-
-	fmt.Println("file-size:", len(bufs))
-
-	reader := NewReader(bufs)
-
-	go func() {
-		time.Sleep(5 * time.Second)
-		//defer profile.Start().Stop()
-		//defer profile.Start(profile.MemProfile, profile.CPUProfile).Stop()
-		//runtime.StartCPUPro
-		f, _ := os.Create("test.prof")
-		pprof.StartCPUProfile(f)
-
-		fmt.Println("starting...")
-		for j := 0; j < 20; j++ {
-			startTime := time.Now().UnixNano()
-			success := 0
-			for i := 0; i < Record; i++ {
-				key := fmt.Sprintf("%s%d", "key-", i)
-				v, _ := reader.Get([]byte(key))
-				if i == v {
-					success++
-				} else {
-					fmt.Println("error...", i)
-				}
-			}
-			fmt.Println(success)
-			fmt.Println("file-get:", (time.Now().UnixNano()-startTime)/1000000, "ms")
-		}
-		pprof.StopCPUProfile()
-		fmt.Println("close...")
-	}()
-
-	http.ListenAndServe("0.0.0.0:6060", nil)
-
-}
 
 func Test_Reader(t *testing.T) {
 	r := TreeNew(bytesCompare)
@@ -71,10 +21,7 @@ func Test_Reader(t *testing.T) {
 	success := 0
 	for i := 0; i < Record; i++ {
 		key := fmt.Sprintf("%s%d", "key-", i)
-		//reader.Get([]byte(key))
 		v, _ := r.Get([]byte(key))
-		//assert.Equal(t, v, i)
-		//fmt.Println(v)
 		if i == v {
 			success++
 		} else {
@@ -82,43 +29,41 @@ func Test_Reader(t *testing.T) {
 		}
 	}
 	fmt.Println("mem-get:", (time.Now().UnixNano()-startTime)/1000000, "ms")
-	fmt.Println(success)
+	fmt.Println("mem-success:", success)
 
 	encoder := NewEncoder(r)
 	bufs := encoder.encode()
 
-	reader := NewReader(bufs)
-	//printTree(reader)
+	fmt.Println("file-size:", len(bufs))
 
-	//v, _ := reader.Get([]byte("key-11"))
+	//reader := NewReader(bufs)
+	////printTree(reader)
+	//
+	//v, _ := reader.Get([]byte("key-12"))
 	//fmt.Println(v)
-
-	startTime = time.Now().UnixNano()
-	success = 0
-	for i := 0; i < Record; i++ {
-		key := fmt.Sprintf("%s%d", "key-", i)
-		//reader.Get([]byte(key))
-		v, _ := reader.Get([]byte(key))
-		//assert.Equal(t, v, i)
-		//fmt.Println(v)
-		if i == v {
-			success++
-		} else {
-			fmt.Println("error...", i)
-		}
-	}
-	fmt.Println("file-get:", (time.Now().UnixNano()-startTime)/1000000, "ms")
-	fmt.Println(success)
+	//
+	//startTime = time.Now().UnixNano()
+	//success = 0
+	//for i := 0; i < Record; i++ {
+	//	key := fmt.Sprintf("%s%d", "key-", i)
+	//	v, _ := reader.Get([]byte(key))
+	//	if i == v {
+	//		success++
+	//	} else {
+	//		fmt.Println("error...", i)
+	//	}
+	//}
+	//fmt.Println("file-get:", (time.Now().UnixNano()-startTime)/1000000, "ms")
+	//fmt.Println("file-success:", success)
 
 	//reader.seek([]byte("key-1"))
 }
 
 func Test_Random(t *testing.T) {
-
 	r := TreeNew(bytesCompare)
 	var records = make(map[string]int)
 	for i := 0; i < Record; i++ {
-		key := RandStringBytesMaskImprSrc(4)
+		key := RandStringBytesMaskImprSrc(8)
 		records[key] = i
 		r.Set([]byte(key), i)
 	}
@@ -139,7 +84,6 @@ func Test_Random(t *testing.T) {
 	}
 	fmt.Println("success:", success)
 	fmt.Println("task:", (time.Now().UnixNano()-startTime)/1000000, "ms")
-
 }
 
 func printTree(r *Reader) {
@@ -161,11 +105,11 @@ func printTree(r *Reader) {
 
 				var suffixBytes []byte
 				var start int
-				hasParent := r.readUInt()
+				//hasParent := r.readUInt()
 				//todo ??
-				if hasParent == HasParent {
-				} else {
-				}
+				//if hasParent == HasParent {
+				//} else {
+				//}
 				suffixLen := r.readUInt()
 				if suffixLen > 0 {
 					suffixBytes = r.readBytes(int(suffixLen))
@@ -211,8 +155,7 @@ func printTree(r *Reader) {
 }
 
 const (
-	//letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	letterBytes   = "abcdefghijk"
+	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	letterIdxMask = 1<<6 - 1 // All 1-bits, as many as 6
 )
 

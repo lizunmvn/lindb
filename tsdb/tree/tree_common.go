@@ -4,13 +4,13 @@ import (
 	"bytes"
 )
 
-const HasParent = 1
-const NoParent = 0
-
-const HasChildrenNode = 1
-const NoChildrenNode = 0
-
-const NotFound = -1
+const (
+	HasParent       = byte('1')
+	NoParent        = byte('0')
+	HasChildrenNode = byte('1')
+	NoChildrenNode  = byte('0')
+	NotFound        = -1
+)
 
 //Compare the size of two byte arrays
 // if a > b return 1
@@ -60,4 +60,8 @@ func lcpByte(l [][]byte) []byte {
 	// In the case where lengths are not equal but all bytes
 	// are equal, min is the answer ("foo" < "foobar").
 	return min
+}
+
+func bytesCombine(pBytes ...[]byte) []byte {
+	return bytes.Join(pBytes, []byte(""))
 }
