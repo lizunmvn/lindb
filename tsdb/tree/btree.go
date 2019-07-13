@@ -1,8 +1,4 @@
-// Copyright 2014 The b Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package tree // import "modernc.org/b"
+package tree
 
 import (
 	"fmt"
@@ -11,8 +7,10 @@ import (
 )
 
 const (
-	kx = 32 //Number of keywords for non-leaf nodes
-	kd = 64 //Number of keywords for leaf nodes
+	// 4 ,4
+	//Is a kx-kd B+Tree
+	kx = 4 //Number of keywords for branch nodes
+	kd = 16 //Number of keywords for leaf nodes
 )
 
 func init() {
