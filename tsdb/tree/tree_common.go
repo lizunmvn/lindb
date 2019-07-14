@@ -10,7 +10,90 @@ const (
 	HasChildrenNode = byte('1')
 	NoChildrenNode  = byte('0')
 	NotFound        = -1
+	SnappyCompress  = byte('1')
+	NoCompress      = byte('0')
 )
+
+type ByteBufReader struct {
+	buf      []byte
+	position int //current reader position
+	length   int
+}
+
+func NewBufReader(bufArray []byte) *ByteBufReader {
+	return &ByteBufReader{
+		buf:    bufArray,
+		length: len(bufArray),
+	}
+}
+
+//read a key containing length and bytes
+func (r *ByteBufReader) readKey() (length int, key []byte) {
+	length = int(r.readUInt())
+	if length > 0 {
+		key = r.readBytes(length)
+	}
+	return length, key
+}
+
+func (r *ByteBufReader) readOffsetInfo(count int) []int {
+	r.readUInt() //offset len
+	offsetPos := make([]int, count)
+
+	for i := 0; i < count; i++ {
+		offsetPos[i] = int(r.readUInt())
+	}
+	return offsetPos
+}
+
+//Read an int
+func (r *ByteBufReader) readUInt() uint64 {
+	v, length := readReadUint(r.buf[r.position:])
+	r.position += length
+	return v
+}
+
+func readReadUint(buf []byte) (v uint64, len int) {
+	var x uint64
+	var s uint
+	for i := 0; ; i++ {
+		b := buf[i]
+		if b < 0x80 {
+			if i > 9 || i == 9 && b > 1 {
+				return x, i + 1
+			}
+			return x | uint64(b)<<s, i + 1
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+	}
+}
+
+//Read fixed length bytes
+func (r *ByteBufReader) readBytes(length int) []byte {
+	if length == 0 {
+		return nil
+	}
+	b := r.buf[r.position : r.position+length]
+	r.position += length
+	return b
+}
+
+//Read a byte
+func (r *ByteBufReader) readByte() byte {
+	b := r.buf[r.position]
+	r.position += 1
+	return b
+}
+
+//Reset position
+func (r *ByteBufReader) newPosition(newPos int) {
+	r.position = newPos
+}
+
+func (r *ByteBufReader) isEnd() bool {
+	return r.position == r.length
+}
 
 //Returns an iterator over elements
 type Iterator interface {

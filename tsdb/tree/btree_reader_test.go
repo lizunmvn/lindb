@@ -20,12 +20,12 @@ func Test_Reader(t *testing.T) {
 	fmt.Println("file-size:", len(bufs))
 
 	reader := NewReader(bufs)
-
+	//
 	testTreeReaderGet(reader)
-	testTreeReaderSeek(reader)
+	//testTreeReaderSeek(reader)
 
-	v, _ := reader.Get([]byte("key-4"))
-	fmt.Println(v)
+	//v, _ := reader.Get([]byte("key-4"))
+	//fmt.Println(v)
 
 	//it := reader.Seek([]byte("key-3"))
 	//it.Next()
@@ -187,18 +187,20 @@ func Test_Random(t *testing.T) {
 	encoder := NewEncoder(r)
 	reader := NewReader(encoder.encode())
 
-	startTime := time.Now().UnixNano()
-	success := 0
-	for k, v := range records {
-		value, _ := reader.Get([]byte(k))
-		if value == v {
-			success++
-		} else {
-			fmt.Println("xx", k)
-		}
-	}
-	fmt.Println("file-get:", (time.Now().UnixNano()-startTime)/1000000, "ms")
-	fmt.Println("file-success:", success)
+	fmt.Println(reader.bodyPos)
+	//
+	//startTime := time.Now().UnixNano()
+	//success := 0
+	//for k, v := range records {
+	//	value, _ := reader.Get([]byte(k))
+	//	if value == v {
+	//		success++
+	//	} else {
+	//		fmt.Println("xx", k)
+	//	}
+	//}
+	//fmt.Println("file-get:", (time.Now().UnixNano()-startTime)/1000000, "ms")
+	//fmt.Println("file-success:", success)
 }
 
 //func printTree(r *Reader) {

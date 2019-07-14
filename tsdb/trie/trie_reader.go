@@ -1,6 +1,9 @@
 package trie
 
-import "github.com/golang/snappy"
+import (
+	"fmt"
+	"github.com/golang/snappy"
+)
 
 type InternalNode struct {
 	k           []byte
@@ -55,6 +58,7 @@ func (r *Reader) Get(k []byte) (int, bool) {
 		nodes := int(r.br.readUInt())
 		var reader = r.br
 		if SnappyCompress == r.br.readByte() {
+			fmt.Println("xxx")
 			data, err := r.readSnappyData()
 			if nil == err {
 				reader = &BytesReader{
@@ -121,6 +125,7 @@ func readReadUint(buf []byte) (v uint64, len int) {
 		s += 7
 	}
 }
+
 func (r *BytesReader) readBytes(length int) []byte {
 	b := r.buf[r.position : r.position+length]
 	r.position += length

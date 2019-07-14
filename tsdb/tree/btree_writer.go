@@ -3,6 +3,7 @@ package tree
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sort"
 )
 
@@ -63,8 +64,8 @@ func (w *Writer) encode() []byte {
 		writeInt(writer, body.Len())
 
 		highWriter := w.highBuf[high]
-		buf := highWriter.Bytes()
-		writeBytes(body, buf)
+		fmt.Println("==high:", high, " length:", highWriter.Len())
+		writeBytes(body, highWriter.Bytes())
 	}
 
 	writeBytes(writer, body.Bytes())
@@ -116,13 +117,13 @@ func (w *Writer) serializeBranchNode(currentHigh int, parentNode *x) int {
 			writeByte(bodyWriter, HasParent)
 			//write suffix
 			suffix := branchNode.k.([]byte)[len(currentCommonPrefix):]
-			w.writeKey(bodyWriter, suffix)
+			writeKey(bodyWriter, suffix)
 		} else {
 			writeByte(bodyWriter, NoParent)
 			//write suffix
 			noParentKey := branchNode.lastKey
 			noParentSuffix := noParentKey[len(currentCommonPrefix):]
-			w.writeKey(bodyWriter, noParentSuffix)
+			writeKey(bodyWriter, noParentSuffix)
 		}
 		writeInt(bodyWriter, startPos)
 	}
@@ -148,7 +149,7 @@ func (w *Writer) serializeLeafNode(currentHigh int, dType *d, leafCommonPrefix [
 
 			//writeInt(offsetWriter, dataWriter.Len())
 			//write suffix
-			w.writeKey(dataWriter, pair.k.([]byte))
+			writeKey(dataWriter, pair.k.([]byte))
 			//write value
 			writeInt(dataWriter, pair.v.(int))
 			leafNodes++
@@ -157,12 +158,26 @@ func (w *Writer) serializeLeafNode(currentHigh int, dType *d, leafCommonPrefix [
 	//write leaf node count
 	writeInt(leafWriter, leafNodes)
 	//write leaf node lcp
-	w.writeKey(leafWriter, leafCommonPrefix)
+	writeKey(leafWriter, leafCommonPrefix)
 	//write offset
-	//writeInt(leafWriter, offsetWriter.Len())
-	//writeBytes(leafWriter, offsetWriter.Bytes())
+	//writeInt(snappyWriter, offsetWriter.Len())
+	//writeBytes(snappyWriter, offsetWriter.Bytes())
+	//encoded := snappy.Encode(nil, snappyWriter.Bytes())
+
+	//writeInt(leafWriter, len(encoded))
+	//writeBytes(leafWriter, encoded)
 	//write k-v
 	//encoded := snappy.Encode(nil, dataWriter.Bytes())
+	//
+	//if len(encoded) < int(float64(dataWriter.Len())*0.9) {
+	//	writeByte(leafWriter, SnappyCompress)
+	//	writeInt(leafWriter, len(encoded))
+	//	writeBytes(leafWriter, encoded)
+	//} else {
+	//	writeByte(leafWriter, NoCompress)
+	//	writeBytes(leafWriter, dataWriter.Bytes())
+	//}
+	//writeByte(leafWriter, NoCompress)
 	writeBytes(leafWriter, dataWriter.Bytes())
 	return start
 }
@@ -258,7 +273,7 @@ func (w *Writer) getOrCreateByteBuf(high int) *bytes.Buffer {
 }
 
 //Write node key to buf
-func (w *Writer) writeKey(buf *bytes.Buffer, suffix []byte) {
+func writeKey(buf *bytes.Buffer, suffix []byte) {
 	writeInt(buf, len(suffix))
 	writeBytes(buf, suffix)
 }

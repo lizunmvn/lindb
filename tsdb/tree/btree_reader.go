@@ -2,13 +2,12 @@ package tree
 
 import (
 	"bytes"
+	"github.com/golang/snappy"
 )
 
 //Reader is used to parse B+Tree in disk, support get and prefix query
 type Reader struct {
-	buf             []byte
-	position        int //current reader position
-	length          int
+	bufReader       *ByteBufReader
 	height          int         //height of the B-tree
 	highPos         map[int]int //key:height of the tree  value:start position
 	bodyPos         int         //The starting position of the data block
@@ -38,19 +37,19 @@ func (it *ReaderIterator) Next() bool {
 		it.init = true
 		return true
 	}
-	if it.reader.isEnd() {
+	if it.reader.bufReader.isEnd() {
 		it.key = nil
 		return false
 	}
 	if !it.hit {
-		it.leafNodes = int(it.reader.readUInt())
-		_, lcp := it.reader.readKey()
+		it.leafNodes = int(it.reader.bufReader.readUInt())
+		_, lcp := it.reader.bufReader.readKey()
 		it.lcp = lcp
 		it.hit = true
 	}
 	if it.idx < it.leafNodes {
-		_, key := it.reader.readKey()
-		v := int(it.reader.readUInt())
+		_, key := it.reader.bufReader.readKey()
+		v := int(it.reader.bufReader.readUInt())
 
 		it.idx++
 		if len(it.lcp) > 0 {
@@ -103,32 +102,31 @@ func (it *ReaderIterator) GetValue() int {
 //Create a B+Tree Reader
 func NewReader(treeBytes []byte) *Reader {
 	reader := &Reader{
-		buf:             treeBytes,
-		length:          len(treeBytes),
+		bufReader:       NewBufReader(treeBytes),
 		highPos:         make(map[int]int),
 		hasChildrenNode: false,
 	}
 
 	//reader header
-	if HasChildrenNode == reader.readByte() {
+	if HasChildrenNode == reader.bufReader.readByte() {
 		reader.hasChildrenNode = true
 	}
-	reader.height = int(reader.readUInt())
+	reader.height = int(reader.bufReader.readUInt())
 	//Starting offset of each height
 	for i := 0; i < reader.height; i++ {
-		high := int(reader.readUInt())
-		start := int(reader.readUInt())
+		high := int(reader.bufReader.readUInt())
+		start := int(reader.bufReader.readUInt())
 		reader.highPos[high] = start
 	}
 
-	reader.bodyPos = reader.position
+	reader.bodyPos = reader.bufReader.position
 	return reader
 }
 
 //Creates a new reader that shares this buffer's content.
 func (r *Reader) Duplicator() *Reader {
 	reader := &Reader{
-		buf:             r.buf,
+		bufReader:       r.bufReader,
 		highPos:         r.highPos,
 		hasChildrenNode: r.hasChildrenNode,
 		bodyPos:         r.bodyPos,
@@ -154,11 +152,11 @@ func (r *Reader) findTargetLeafNodePos(target []byte) int {
 
 	if r.hasChildrenNode {
 		for high := 1; high < r.height; high++ {
-			r.newPosition(r.bodyPos + r.highPos[high] + startPos)
+			r.bufReader.newPosition(r.bodyPos + r.highPos[high] + startPos)
 			//read branch count
-			count := int(r.readUInt())
+			count := int(r.bufReader.readUInt())
 			//read common prefix
-			lcpLen, lcp := r.readKey()
+			lcpLen, lcp := r.bufReader.readKey()
 
 			if lcpLen >= len(target) {
 				if bytes.Compare(lcp, target) < 0 {
@@ -202,18 +200,18 @@ func (r *Reader) linearSearchTargetPos(target []byte, count, lcpLen int, lcp []b
 		}
 		if cmp > 0 {
 			//read next branch node
-			r.readByte()
-			r.newPosition(r.position + int(r.readUInt()))
-			return int(r.readUInt())
+			r.bufReader.readByte()
+			r.bufReader.newPosition(r.bufReader.position + int(r.bufReader.readUInt()))
+			return int(r.bufReader.readUInt())
 		}
 	}
 
 	for i := 0; i < count; i++ {
 		//read a branch node
-		hasParent := r.readByte() == HasParent
-		suffixLen := int(r.readUInt())
-		suffix := r.readBytes(suffixLen)
-		nextStartPos := int(r.readUInt())
+		hasParent := r.bufReader.readByte() == HasParent
+		suffixLen := int(r.bufReader.readUInt())
+		suffix := r.bufReader.readBytes(suffixLen)
+		nextStartPos := int(r.bufReader.readUInt())
 
 		cmp := bytesCompare(suffix, targetSuffix)
 		if cmp > 0 {
@@ -230,26 +228,88 @@ func (r *Reader) linearSearchTargetPos(target []byte, count, lcpLen int, lcp []b
 //Linear search target,
 //return associated value; return false if no such key
 func (r *Reader) linearSearchTarget(pos int, target []byte) (int /*V*/, bool) {
-	r.newPosition(r.bodyPos + r.highPos[r.height] + pos)
-	count := int(r.readUInt())
-	lcpLen, lcp := r.readKey()
+	r.bufReader.newPosition(r.bodyPos + r.highPos[r.height] + pos)
+
+	//data, err := r.readSnappyData()
+	//if nil == err {
+	//	reader := NewBufReader(data)
+	//	count := int(reader.readUInt())
+	//	lcpLen, lcp := reader.readKey()
+	//	if lcpLen > 0 {
+	//		if !bytes.HasPrefix(target, lcp) {
+	//			return NotFound, false
+	//		}
+	//	}
+	//
+	//	offsetPos := reader.readOffsetInfo(count)
+	//
+	//	//binary search
+	//	var mid, start, end int
+	//	end = count - 1
+	//
+	//	leafStartPos := reader.position
+	//	for ; start <= end; {
+	//		mid = (end-start)/2 + start
+	//		reader.newPosition(offsetPos[mid] + leafStartPos)
+	//		_, suffix := reader.readKey()
+	//		v := int(reader.readUInt())
+	//
+	//		switch cmp := bytes.Compare(target[lcpLen:], suffix); {
+	//		case cmp > 0:
+	//			start = mid + 1
+	//		case cmp == 0:
+	//			return v, true
+	//		default:
+	//			end = mid - 1
+	//		}
+	//	}
+	//
+	//} else {
+	//	return NotFound, false
+	//}
+
+	count := int(r.bufReader.readUInt())
+	lcpLen, lcp := r.bufReader.readKey()
+	//useSnappy := r.bufReader.readByte() == SnappyCompress
+	useSnappy := false
 
 	if lcpLen > 0 {
 		if !bytes.HasPrefix(target, lcp) {
-			//todo
 			return NotFound, false
 		}
 	}
 
-	for i := 0; i < count; i++ {
-		//read a leaf node
-		suffix := r.readBytes(int(r.readUInt()))
-		v := int(r.readUInt())
-		if bytes.Compare(target[lcpLen:], suffix) == 0 {
-			return int(v), true
+	if useSnappy {
+		data, err := r.readSnappyData()
+		if nil == err {
+			reader := NewBufReader(data)
+			for i := 0; i < count; i++ {
+				//read a leaf node
+				suffix := reader.readBytes(int(reader.readUInt()))
+				v := int(reader.readUInt())
+				if bytes.Compare(target[lcpLen:], suffix) == 0 {
+					return int(v), true
+				}
+			}
+		}
+	} else {
+
+		for i := 0; i < count; i++ {
+			//read a leaf node
+			suffix := r.bufReader.readBytes(int(r.bufReader.readUInt()))
+			v := int(r.bufReader.readUInt())
+			if bytes.Compare(target[lcpLen:], suffix) == 0 {
+				return int(v), true
+			}
 		}
 	}
 	return NotFound, false
+}
+
+func (r *Reader) readSnappyData() ([]byte, error) {
+	length := int(r.bufReader.readUInt())
+	data := r.bufReader.readBytes(length)
+	return snappy.Decode(nil, data)
 }
 
 //
@@ -282,7 +342,7 @@ func (r *Reader) Range(startKey, endKey []byte) *ReaderIterator {
 	if startPos == NotFound {
 		return nil
 	}
-	r.newPosition(r.bodyPos + r.highPos[r.height] + startPos)
+	r.bufReader.newPosition(r.bodyPos + r.highPos[r.height] + startPos)
 
 	rangeFilter := &RangeFilter{
 		startKey: startKey,
@@ -293,7 +353,7 @@ func (r *Reader) Range(startKey, endKey []byte) *ReaderIterator {
 
 //SeekFirst returns an Iterator positioned on the first K-V pair in the tree
 func (r *Reader) SeekToFirst() *ReaderIterator {
-	r.newPosition(r.bodyPos + r.highPos[r.height])
+	r.bufReader.newPosition(r.bodyPos + r.highPos[r.height])
 
 	it := &ReaderIterator{
 		reader: r,
@@ -309,7 +369,7 @@ func (r *Reader) Seek(prefix []byte) *ReaderIterator {
 	if startPos == NotFound {
 		return nil
 	}
-	r.newPosition(r.bodyPos + r.highPos[r.height] + startPos)
+	r.bufReader.newPosition(r.bodyPos + r.highPos[r.height] + startPos)
 
 	seekFilter := &SeekFilter{
 		prefix: prefix,
@@ -320,8 +380,8 @@ func (r *Reader) Seek(prefix []byte) *ReaderIterator {
 
 //
 func (r *Reader) seekLeafNodes(filter Filter) *ReaderIterator {
-	leafNodes := int(r.readUInt())
-	leafLcpLen, leafLcp := r.readKey()
+	leafNodes := int(r.bufReader.readUInt())
+	leafLcpLen, leafLcp := r.bufReader.readKey()
 
 	it := &ReaderIterator{
 		reader:    r,
@@ -332,8 +392,8 @@ func (r *Reader) seekLeafNodes(filter Filter) *ReaderIterator {
 
 	for i := 0; i < leafNodes; i++ {
 		it.idx++
-		_, suffix := r.readKey()
-		v := int(r.readUInt())
+		_, suffix := r.bufReader.readKey()
+		v := int(r.bufReader.readUInt())
 		key := suffix
 		if leafLcpLen > 0 {
 			key = bytesCombine(leafLcp, suffix)
@@ -355,9 +415,9 @@ func (r *Reader) seekLeafNodes(filter Filter) *ReaderIterator {
 //=========================================binary search
 //Leaf node binary search
 func (r *Reader) binarySearch(pos int, target []byte) (int /*V*/, bool) {
-	r.newPosition(r.bodyPos + r.highPos[r.height] + pos)
-	count := int(r.readUInt())
-	lcpLen, lcp := r.readKey()
+	r.bufReader.newPosition(r.bodyPos + r.highPos[r.height] + pos)
+	count := int(r.bufReader.readUInt())
+	lcpLen, lcp := r.bufReader.readKey()
 
 	if lcpLen > 0 {
 		if !bytes.HasPrefix(target, lcp) {
@@ -365,19 +425,19 @@ func (r *Reader) binarySearch(pos int, target []byte) (int /*V*/, bool) {
 		}
 	}
 
-	offsetPos := r.readOffsetInfo(count)
+	offsetPos := r.bufReader.readOffsetInfo(count)
 
 	//binary search
 	var mid, start, end int
 	end = count - 1
 
-	leafStartPos := r.position
+	leafStartPos := r.bufReader.position
 	for ; start <= end; {
 		mid = (end-start)/2 + start
-		r.newPosition(offsetPos[mid] + leafStartPos)
-		suffixLen := int(r.readUInt())
-		suffix := r.readBytes(suffixLen)
-		v := int(r.readUInt())
+		r.bufReader.newPosition(offsetPos[mid] + leafStartPos)
+		suffixLen := int(r.bufReader.readUInt())
+		suffix := r.bufReader.readBytes(suffixLen)
+		v := int(r.bufReader.readUInt())
 
 		switch cmp := bytes.Compare(target[lcpLen:], suffix); {
 		case cmp > 0:
@@ -394,7 +454,7 @@ func (r *Reader) binarySearch(pos int, target []byte) (int /*V*/, bool) {
 func (r *Reader) binarySearchLeafNodePos(target []byte, count, lcpLen int, lcp []byte) (nextStartPos int) {
 	//binary search
 	var mid, start, end int
-	offsetPos := r.readOffsetInfo(count)
+	offsetPos := r.bufReader.readOffsetInfo(count)
 	end = count - 1
 	//
 	targetLcpLen := extractHeaderAndTargetLcp(lcp, target)
@@ -408,21 +468,21 @@ func (r *Reader) binarySearchLeafNodePos(target []byte, count, lcpLen int, lcp [
 		}
 		if cmp > 0 {
 			//skip
-			r.readByte()
-			r.newPosition(r.position + int(r.readUInt()))
-			return int(r.readUInt())
+			r.bufReader.readByte()
+			r.bufReader.newPosition(r.bufReader.position + int(r.bufReader.readUInt()))
+			return int(r.bufReader.readUInt())
 		}
 	}
 
-	startPos := r.position
+	startPos := r.bufReader.position
 	for start <= end {
 		mid = (start + end) >> 1
-		r.newPosition(offsetPos[mid] + startPos)
+		r.bufReader.newPosition(offsetPos[mid] + startPos)
 
-		hasParent := r.readByte() == HasParent
-		suffixLen := int(r.readUInt())
-		suffix := r.readBytes(suffixLen)
-		nextStartPos := int(r.readUInt())
+		hasParent := r.bufReader.readByte() == HasParent
+		suffixLen := int(r.bufReader.readUInt())
+		suffix := r.bufReader.readBytes(suffixLen)
+		nextStartPos := int(r.bufReader.readUInt())
 
 		switch cmp := bytesCompare(suffix, targetSuffix); {
 		case cmp > 0:
@@ -433,10 +493,10 @@ func (r *Reader) binarySearchLeafNodePos(target []byte, count, lcpLen int, lcp [
 
 		default:
 			if hasParent {
-				r.newPosition(offsetPos[mid+1] + startPos)
-				r.readByte()
-				r.newPosition(r.position + int(r.readUInt()))
-				return int(r.readUInt())
+				r.bufReader.newPosition(offsetPos[mid+1] + startPos)
+				r.bufReader.readByte()
+				r.bufReader.newPosition(r.bufReader.position + int(r.bufReader.readUInt()))
+				return int(r.bufReader.readUInt())
 			} else {
 				return nextStartPos
 			}
@@ -490,71 +550,3 @@ func (r *Reader) binarySearchLeafNodePos(target []byte, count, lcpLen int, lcp [
 //	node.v = int(r.readUInt())
 //	return node
 //}
-
-//read a key containing length and bytes
-func (r *Reader) readKey() (length int, key []byte) {
-	length = int(r.readUInt())
-	if length > 0 {
-		key = r.readBytes(length)
-	}
-	return length, key
-}
-
-func (r *Reader) readOffsetInfo(count int) []int {
-	r.readUInt() //offset len
-	offsetPos := make([]int, count)
-
-	for i := 0; i < count; i++ {
-		offsetPos[i] = int(r.readUInt())
-	}
-	return offsetPos
-}
-
-//Read an int
-func (r *Reader) readUInt() uint64 {
-	v, length := readReadUint(r.buf[r.position:])
-	r.position += length
-	return v
-}
-
-func readReadUint(buf []byte) (v uint64, len int) {
-	var x uint64
-	var s uint
-	for i := 0; ; i++ {
-		b := buf[i]
-		if b < 0x80 {
-			if i > 9 || i == 9 && b > 1 {
-				return x, i + 1
-			}
-			return x | uint64(b)<<s, i + 1
-		}
-		x |= uint64(b&0x7f) << s
-		s += 7
-	}
-}
-
-//Read fixed length bytes
-func (r *Reader) readBytes(length int) []byte {
-	if length == 0 {
-		return nil
-	}
-	b := r.buf[r.position : r.position+length]
-	r.position += length
-	return b
-}
-
-func (r *Reader) isEnd() bool {
-	return r.position == r.length
-}
-
-//Read a byte
-func (r *Reader) readByte() byte {
-	b := r.buf[r.position]
-	r.position += 1
-	return b
-}
-
-//Reset position
-func (r *Reader) newPosition(newPos int) {
-	r.position = newPos
-}
