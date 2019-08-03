@@ -20,7 +20,7 @@ type MetricUID interface {
 //Shard level sharing.
 type TagsUID interface {
 	//GetOrCreateTagsID returns find the tags ID associated with given tags or create it.
-	GetOrCreateTagsID(metricID uint32, tags string) (uint32, error)
+	GetOrCreateTagsID(metricID uint32, tags []byte) (uint32, error)
 	//GetTagNames return get all tag names within the metric name
 	GetTagNames(metricID uint32, limit int16) map[string]struct{}
 	//GetTagValueBitmap returns find bitmap associated with a given tag value

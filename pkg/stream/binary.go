@@ -244,9 +244,9 @@ func (r *ByteBufReader) ReadBytes(length int) []byte {
 	return b
 }
 
-//SubArray means to get the byte array from start
-func (r *ByteBufReader) SubArray(start int) []byte {
-	sub := r.buf[start:]
+//Slice returns a slice of this buffer's sub-array
+func (r *ByteBufReader) Slice(startIdx int) []byte {
+	sub := r.buf[startIdx:]
 	return sub
 }
 
@@ -270,4 +270,12 @@ func (r *ByteBufReader) IsEnd() bool {
 //GetPosition indicates the current read position
 func (r *ByteBufReader) GetPosition() int {
 	return r.position
+}
+
+func (r *ByteBufReader) Duplicator() *ByteBufReader {
+	clone := &ByteBufReader{
+		buf:    r.buf,
+		length: r.length,
+	}
+	return clone
 }

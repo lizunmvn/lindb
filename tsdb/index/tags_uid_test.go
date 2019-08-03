@@ -104,7 +104,8 @@ func initTags() *TagsUID {
 				tagsMap := make(map[string]string)
 				tagsMap["a"] = fmt.Sprintf("%s%d", "value-1-", j)
 				tagsMap["b"] = fmt.Sprintf("%s%d", "value-2-", k)
-				tagsUID.GetOrCreateTagsID(uint32(i), MapToString(tagsMap))
+				tags, _ := MapToBytes(tagsMap)
+				tagsUID.GetOrCreateTagsID(uint32(i), tags)
 			}
 		}
 	}
@@ -138,9 +139,10 @@ func BenchmarkTagsMapping(b *testing.B) {
 				tagsMap["disk"] = fmt.Sprintf("%s%d", "disk-", j)
 				tagsMap["partition"] = fmt.Sprintf("%s%d", "partition-", k)
 				//writer.PutUInt32(uint32(id))
-				//writer.PutLenBytes([]byte(MapToString(tagsMap)))
-				_, err := writer.Write([]byte(MapToString(tagsMap)))
-				length += len(MapToString(tagsMap))
+				//writer.PutLenBytes([]byte(MapToBytes(tagsMap)))
+				tags, _ := MapToBytes(tagsMap)
+				_, err := writer.Write(tags)
+				length += len(tags)
 				//fmt.Println(n)
 				if nil != err {
 					fmt.Println(err)

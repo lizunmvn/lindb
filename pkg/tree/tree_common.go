@@ -61,15 +61,15 @@ func (s *RangeFilter) endMatch(key []byte) bool {
 	return BytesCompare(key, s.endKey) <= 0
 }
 
-//SkipFilter represents always matching Filter
-type SkipFilter struct {
+//TrueFilter represents always matching Filter
+type TrueFilter struct {
 }
 
-func (s *SkipFilter) beginMatch(key []byte) bool {
+func (s *TrueFilter) beginMatch(key []byte) bool {
 	return true
 }
 
-func (s *SkipFilter) endMatch(key []byte) bool {
+func (s *TrueFilter) endMatch(key []byte) bool {
 	return true
 }
 

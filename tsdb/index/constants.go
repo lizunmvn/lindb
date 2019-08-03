@@ -1,7 +1,7 @@
 package index
 
 import (
-	"encoding/json"
+	"github.com/vmihailenco/msgpack"
 	"math"
 )
 
@@ -15,13 +15,11 @@ const (
 	NotFoundFieldID uint32 = math.MaxUint32
 )
 
-func StringToMap(tags string) map[string]string {
-	var tagsMap map[string]string
-	_ = json.Unmarshal([]byte(tags), &tagsMap)
-	return tagsMap
+func BytesToMap(tags []byte) (tagsMap map[string]string, err error) {
+	err = msgpack.Unmarshal(tags, &tagsMap)
+	return tagsMap, err
 }
 
-func MapToString(tagsMap map[string]string) string {
-	b, _ := json.Marshal(tagsMap)
-	return string(b)
+func MapToBytes(tagsMap map[string]string) ([]byte, error) {
+	return msgpack.Marshal(tagsMap)
 }

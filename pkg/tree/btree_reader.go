@@ -192,8 +192,7 @@ func (r *Reader) linearSearchTargetPos(target []byte, count, lcpLen int, lcp []b
 	for i := 0; i < count; i++ {
 		//read a branch node
 		hasParent := r.bufReader.ReadByte() == HasParent
-		suffixLen := int(r.bufReader.ReadUvarint64())
-		suffix := r.bufReader.ReadBytes(suffixLen)
+		_, suffix := r.bufReader.ReadLenBytes()
 		nextStartPos := int(r.bufReader.ReadUvarint64())
 
 		cmp := BytesCompare(suffix, targetSuffix)
@@ -223,7 +222,7 @@ func (r *Reader) linearSearchTarget(pos int, target []byte) (int /*V*/, bool) {
 
 	for i := 0; i < count; i++ {
 		//read a leaf node
-		suffix := r.bufReader.ReadBytes(int(r.bufReader.ReadUvarint64()))
+		_, suffix := r.bufReader.ReadLenBytes()
 		v := int(r.bufReader.ReadUvarint64())
 		if bytes.Equal(target[lcpLen:], suffix) {
 			return v, true
@@ -253,7 +252,7 @@ func (r *Reader) SeekToFirst() Iterator {
 
 	it := &ReaderIterator{
 		reader: r,
-		filter: &SkipFilter{},
+		filter: &TrueFilter{},
 		init:   true,
 	}
 	return it

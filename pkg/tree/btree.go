@@ -43,7 +43,7 @@ type (
 	//
 	Cmp func(a, b interface{} /*K*/) int
 
-	//leaf-node
+	//leaf node
 	d struct {
 		// data page
 		c int //count
@@ -52,7 +52,7 @@ type (
 		p *d //Previous leaf node pointer
 	}
 
-	//Leaf node element
+	//leaf node element
 	de struct {
 		// d element
 		k interface{} /*K*/
@@ -86,7 +86,7 @@ type (
 		r     interface{} //An interface either No-leaf node or leaf node
 		ver   int64
 	}
-	//Non-leaf node element
+	//branch node element
 	xe struct {
 		// x element
 		ch      interface{} // Child node
@@ -95,7 +95,7 @@ type (
 		lastKey []byte      // Last child node
 	}
 
-	//Non-leaf node
+	//branch node
 	x struct {
 		// index page
 		c int          //Number of child nodes

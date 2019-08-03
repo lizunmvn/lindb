@@ -95,7 +95,7 @@ func (tr *TagsReader) getTagValueBitmap(tagName, tagValue string) *roaring.Bitma
 			pos := tr.reader.GetPosition()
 
 			bitmap := roaring.New()
-			_, err := bitmap.ReadFrom(bytes.NewBuffer(tr.reader.SubArray(pos)))
+			_, err := bitmap.ReadFrom(bytes.NewBuffer(tr.reader.Slice(pos)))
 			if nil != err {
 				logger.GetLogger("tsdb/index").Error("decode bitmap error:", zap.String(tagName, tagValue), logger.Error(err))
 				return nil
@@ -132,8 +132,11 @@ func (t *TagsUID) getSortTagNames() []string {
 }
 
 //GetOrCreateTagsID returns find the tags ID associated with given tags or create it.
-func (t *TagsUID) GetOrCreateTagsID(metricID uint32, tags string) (uint32, error) {
-	tagsMap := StringToMap(tags)
+func (t *TagsUID) GetOrCreateTagsID(metricID uint32, tags []byte) (uint32, error) {
+	tagsMap, err := BytesToMap(tags)
+	if nil != err {
+		return NotFoundTagsID, err
+	}
 	//load from kv-store
 	tagsID := t.getTagsIDFromDisk(metricID, tagsMap)
 	if tagsID == NotFoundTagsID {
