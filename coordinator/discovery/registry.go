@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/pathutil"
-	"github.com/eleme/lindb/pkg/state"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/pathutil"
+	"github.com/lindb/lindb/pkg/state"
+	"github.com/lindb/lindb/pkg/timeutil"
 )
 
 // Registry represents server node register
@@ -42,27 +43,22 @@ func NewRegistry(repo state.Repository, prefix string, ttl int64) Registry {
 		repo:   repo,
 		ctx:    ctx,
 		cancel: cancel,
-		log:    logger.GetLogger("coondinator/registry"),
+		log:    logger.GetLogger("coordinator/registry"),
 	}
 }
 
 // Register registers node info, add it to active node list for discovery
 func (r *registry) Register(node models.Node) error {
-	nodeBytes, err := json.Marshal(node)
-	if err != nil {
-		r.log.Error("convert node to byte error when register node info", logger.Error(err))
-		return err
-	}
 	// register node info
-	path := pathutil.GetNodePath(r.prefix, node.String())
+	path := pathutil.GetNodePath(r.prefix, node.Indicator())
 	// register node if fail retry it
-	go r.register(path, nodeBytes)
+	go r.register(path, node)
 	return nil
 }
 
 // Deregister deregisters node info, remove it from active list
 func (r *registry) Deregister(node models.Node) error {
-	return r.repo.Delete(r.ctx, pathutil.GetNodePath(r.prefix, node.String()))
+	return r.repo.Delete(r.ctx, pathutil.GetNodePath(r.prefix, node.Indicator()))
 }
 
 // Close closes registry, releases resources
@@ -72,13 +68,18 @@ func (r *registry) Close() error {
 }
 
 // register registers node info, if fail do retry
-func (r *registry) register(path string, node []byte) {
+func (r *registry) register(path string, node models.Node) {
 	for {
 		// if ctx happen err, exit register loop
 		if r.ctx.Err() != nil {
 			return
 		}
-		closed, err := r.repo.Heartbeat(r.ctx, path, node, r.ttl)
+		nodeBytes, err := json.Marshal(&models.ActiveNode{OnlineTime: timeutil.Now(), Node: node})
+		if err != nil {
+			r.log.Error("convert node to byte error when register node info", logger.Error(err))
+			return
+		}
+		closed, err := r.repo.Heartbeat(r.ctx, path, nodeBytes, r.ttl)
 		if err != nil {
 			r.log.Error("register storage node error", logger.Error(err))
 			time.Sleep(500 * time.Millisecond)

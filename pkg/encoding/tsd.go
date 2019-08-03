@@ -3,8 +3,8 @@ package encoding
 import (
 	"bytes"
 
-	"github.com/eleme/lindb/pkg/bit"
-	"github.com/eleme/lindb/pkg/stream"
+	"github.com/lindb/lindb/pkg/bit"
+	"github.com/lindb/lindb/pkg/stream"
 )
 
 // TSDEncoder encodes time series data point
@@ -163,4 +163,14 @@ func (d *TSDDecoder) Value() uint64 {
 		return d.values.Value()
 	}
 	return 0
+}
+
+// DecodeTSDTime decodes start-time-slot and end-time-slot of tsd.
+// a simple method extracted from NewTSDDecoder to reduce gc pressure.
+func DecodeTSDTime(data []byte) (startTime, endTime int) {
+	binary := stream.BinaryReader(data)
+	startTime = int(binary.ReadUvarint32())
+	count := int(binary.ReadUvarint32())
+	endTime = startTime + count - 1
+	return
 }

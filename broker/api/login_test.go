@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dgrijalva/jwt-go"
-	"github.com/magiconair/properties/assert"
-	"gopkg.in/check.v1"
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/stretchr/testify/assert"
+	check "gopkg.in/check.v1"
 
-	"github.com/eleme/lindb/broker/middleware"
-	"github.com/eleme/lindb/mock"
-	"github.com/eleme/lindb/models"
+	"github.com/lindb/lindb/broker/middleware"
+	"github.com/lindb/lindb/mock"
+	"github.com/lindb/lindb/models"
 )
 
 type testLoginAPISuite struct {

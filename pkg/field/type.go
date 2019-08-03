@@ -1,5 +1,7 @@
 package field
 
+import "github.com/lindb/lindb/pkg/function"
+
 // ValueType represents primitive field's value type
 type ValueType int
 
@@ -20,7 +22,7 @@ const (
 )
 
 // Type represents field type for LinDB support
-type Type uint16
+type Type uint8
 
 // Defines all field types for LinDB support(user write)
 const (
@@ -31,3 +33,17 @@ const (
 
 	Unknown
 )
+
+var schemas = map[Type]schema{}
+
+func init() {
+	schemas[SumField] = newSumSchema()
+}
+
+func GetPrimitiveFields(fieldType Type, funcType function.Type) map[uint16]AggType {
+	schema := schemas[fieldType]
+	if schema == nil {
+		return nil
+	}
+	return schema.getPrimitiveFields(funcType)
+}

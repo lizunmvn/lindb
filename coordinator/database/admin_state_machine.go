@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/eleme/lindb/constants"
-	"github.com/eleme/lindb/coordinator/discovery"
-	"github.com/eleme/lindb/coordinator/storage"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/state"
+	"github.com/lindb/lindb/constants"
+	"github.com/lindb/lindb/coordinator/discovery"
+	"github.com/lindb/lindb/coordinator/storage"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/state"
 )
 
 // AdminStateMachine is database config controller,
@@ -131,7 +131,7 @@ func (sm *adminStateMachine) createShardAssignment(databaseName string,
 	//TODO need calc resource and pick related node for store data
 	var nodes = make(map[int]*models.Node)
 	for idx, node := range activeNodes {
-		nodes[idx] = node
+		nodes[idx] = &node.Node
 	}
 
 	var nodeIDs []int
@@ -167,7 +167,7 @@ func (sm *adminStateMachine) getNodes(clusterName string) (map[int]*models.Node,
 	}
 	var nodes = make(map[int]*models.Node)
 	for idx, node := range activeNodes {
-		nodes[idx] = node
+		nodes[idx] = &node.Node
 	}
 	return nodes, nil
 }

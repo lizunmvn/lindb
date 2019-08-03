@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/eleme/lindb/constants"
-	"github.com/eleme/lindb/coordinator/discovery"
-	"github.com/eleme/lindb/coordinator/task"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/pathutil"
-	"github.com/eleme/lindb/pkg/state"
-	"github.com/eleme/lindb/service"
+	"github.com/lindb/lindb/constants"
+	"github.com/lindb/lindb/coordinator/discovery"
+	"github.com/lindb/lindb/coordinator/task"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/pathutil"
+	"github.com/lindb/lindb/pkg/state"
+	"github.com/lindb/lindb/service"
 )
 
 // Cluster represents storage cluster controller,
@@ -23,7 +23,7 @@ import (
 type Cluster interface {
 	discovery.Listener
 	// GetActiveNodes returns all active nodes
-	GetActiveNodes() []*models.Node
+	GetActiveNodes() []*models.ActiveNode
 	// GetShardAssign returns shard assignment by database name, return not exist err if it not exist
 	GetShardAssign(databaseName string) (*models.ShardAssignment, error)
 	// SaveShardAssign saves shard assignment
@@ -124,7 +124,7 @@ func (c *cluster) GetRepo() state.Repository {
 }
 
 // GetActiveNodes returns all active nodes
-func (c *cluster) GetActiveNodes() []*models.Node {
+func (c *cluster) GetActiveNodes() []*models.ActiveNode {
 	c.mutex.RLock()
 	activeNodes := c.clusterState.GetActiveNodes()
 	c.mutex.RUnlock()
@@ -158,7 +158,7 @@ func (c *cluster) SaveShardAssign(databaseName string, shardAssign *models.Shard
 	for nodeID, taskParam := range tasks {
 		node := shardAssign.Nodes[nodeID]
 		params = append(params, task.ControllerTaskParam{
-			NodeID: node.String(),
+			NodeID: node.Indicator(),
 			Params: taskParam,
 		})
 	}
@@ -191,7 +191,7 @@ func (c *cluster) Close() {
 
 // addNode adds node into active node list
 func (c *cluster) addNode(resource []byte) {
-	node := &models.Node{}
+	node := &models.ActiveNode{}
 	if err := json.Unmarshal(resource, node); err != nil {
 		c.log.Error("discovery new storage node but unmarshal error",
 			logger.String("data", string(resource)), logger.Error(err))

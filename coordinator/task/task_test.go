@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/check.v1"
+	check "gopkg.in/check.v1"
 
-	"github.com/eleme/lindb/mock"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/state"
+	"github.com/lindb/lindb/mock"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/state"
 )
 
 const kindDummy Kind = "you-guess"
@@ -54,8 +54,8 @@ func (ts *testTaskSuite) Test_tasks(c *check.C) {
 		_ = controller.Close()
 	}()
 	err := controller.Submit(kindDummy, "wtf-2019-07-05--1", []ControllerTaskParam{
-		{NodeID: node1.String(), Params: dummyParams{}},
-		{NodeID: node2.String(), Params: dummyParams{}},
+		{NodeID: node1.Indicator(), Params: dummyParams{}},
+		{NodeID: node2.Indicator(), Params: dummyParams{}},
 	})
 	if err != nil {
 		c.Fatal(err)

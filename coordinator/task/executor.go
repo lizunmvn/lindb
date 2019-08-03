@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/state"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/state"
 )
 
 // Executor executes tasks on node.
@@ -26,7 +26,7 @@ type Executor struct {
 func NewExecutor(ctx context.Context, node *models.Node, cli state.Repository) *Executor {
 	ctx, cancel := context.WithCancel(ctx)
 	return &Executor{
-		keypfx:     fmt.Sprintf("/task-coordinator/%s/executor/%s/", version, node.String()),
+		keypfx:     fmt.Sprintf("/task-coordinator/%s/executor/%s/", version, node.Indicator()),
 		cli:        cli,
 		node:       node,
 		processors: map[Kind]*taskProcessor{},

@@ -1,15 +1,15 @@
 package queue
 
 import (
+	"path"
 	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/queue/segment"
-	"github.com/eleme/lindb/pkg/util"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/queue/segment"
 )
 
 const (
@@ -69,19 +69,18 @@ type queue struct {
 // NewQueue returns Queue based on dirPath, dataFileSizeLimit is used to limit the segment file size,
 // removeTaskInterval specifics the interval to remove expired segments.
 func NewQueue(dirPath string, dataFileSizeLimit int, removeTaskInterval time.Duration) (Queue, error) {
-	dirPath = util.DirAppendSepa(dirPath)
-	if err := util.MkDir(dirPath); err != nil {
+	if err := fileutil.MkDir(dirPath); err != nil {
 		return nil, err
 	}
 
-	metaPath := dirPath + metaFileName
+	metaPath := path.Join(dirPath, metaFileName)
 	meta, err := loadOrCreateMeta(metaPath)
 	if err != nil {
 		return nil, err
 	}
 
 	headSeq, tailSeq := meta.ReadInt64(queueHeadSeqOffset), meta.ReadInt64(queueTailSeqOffset)
-	fct, err := segment.NewFactory(dirPath+segmentDirName, dataFileSizeLimit, headSeq, tailSeq)
+	fct, err := segment.NewFactory(path.Join(dirPath, segmentDirName), dataFileSizeLimit, headSeq, tailSeq)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +139,7 @@ func (q *queue) Append(data []byte) (int64, error) {
 	// assert
 	if seq != q.headSeq {
 		q.logger.Error("seq num and head seq not equal",
-			zap.Int64("seq", seq), zap.Int64("headSeq", q.headSeq))
+			logger.Int64("seq", seq), logger.Int64("headSeq", q.headSeq))
 		panic("append error")
 	}
 
@@ -184,7 +183,7 @@ func (q *queue) Ack(seq int64) {
 		q.setTailSeq(seq)
 		q.meta.WriteInt64(queueTailSeqOffset, seq)
 		if err := q.meta.Sync(); err != nil {
-			q.logger.Error("sync queue meta error", zap.Error(err))
+			q.logger.Error("sync queue meta error", logger.Error(err))
 		}
 	}
 }
@@ -197,7 +196,7 @@ func (q *queue) Close() {
 
 	q.fct.Close()
 	if err := q.meta.Close(); err != nil {
-		q.logger.Error("close queue meta error", zap.Error(err))
+		q.logger.Error("close queue meta error", logger.Error(err))
 	}
 }
 
@@ -207,7 +206,7 @@ func (q *queue) initRemoveSegmentsTask() {
 		q.logger.Info("initRemoveSegmentsTask")
 		for range q.rmSegmentsTicker.C {
 			if err := q.fct.RemoveSegments(q.TailSeq()); err != nil {
-				q.logger.Error("remove segments error", zap.String("dirPath", q.dirPath), zap.Error(err))
+				q.logger.Error("remove segments error", logger.String("dirPath", q.dirPath), logger.Error(err))
 			}
 		}
 	}()

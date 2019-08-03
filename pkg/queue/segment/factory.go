@@ -3,18 +3,17 @@ package segment
 import (
 	"fmt"
 	"os"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/mmap"
-	"github.com/eleme/lindb/pkg/queue/page"
-	"github.com/eleme/lindb/pkg/util"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/queue/page"
 )
 
 const (
@@ -99,9 +98,7 @@ type factory struct {
 // NewFactory builds a segment factory by loading file from dirPath.
 // HeadSeq and  TailSeq are used to filter segments in use.
 func NewFactory(dirPath string, dataFileSizeLimit int, headSeq, tailSeq int64) (Factory, error) {
-	dirPath = util.DirAppendSepa(dirPath)
-
-	if err := util.MkDir(dirPath); err != nil {
+	if err := fileutil.MkDir(dirPath); err != nil {
 		return nil, err
 	}
 
@@ -123,7 +120,7 @@ func NewFactory(dirPath string, dataFileSizeLimit int, headSeq, tailSeq int64) (
 
 // load loads segments from dirPath, filtering segment file with headSeq and tailSeq.
 func (fct *factory) load(headSeq, tailSeq int64) error {
-	fileNames, err := util.ListDir(fct.dirPath)
+	fileNames, err := fileutil.ListDir(fct.dirPath)
 	if err != nil {
 		return err
 	}
@@ -140,14 +137,15 @@ func (fct *factory) load(headSeq, tailSeq int64) error {
 	filePathSet := make(map[string]struct{})
 
 	for _, fn := range fileNames {
-		filePathSet[fct.dirPath+fn] = struct{}{}
+		filePath := path.Join(fct.dirPath, fn)
+		filePathSet[filePath] = struct{}{}
 		if strings.HasSuffix(fn, indexFileSuffix) {
 			seqNumStr := fn[0:strings.Index(fn, indexFileSuffix)]
-			seq, err := strconv.Atoi(seqNumStr)
+			seq, err := strconv.ParseInt(seqNumStr, 10, 64)
 			if err != nil {
 				return err
 			}
-			seqRange = append(seqRange, int64(seq))
+			seqRange = append(seqRange, seq)
 		}
 	}
 
@@ -191,7 +189,7 @@ func (fct *factory) loadOrCreateSegment(begin, end int64, filePathSet map[string
 		return fmt.Errorf("segemnt file %s not found", dataFilePath)
 	}
 
-	dataMappedBytes, err := mmap.RWMap(dataFilePath, fct.dataFileSizeLimit)
+	dataMappedBytes, err := fileutil.RWMap(dataFilePath, fct.dataFileSizeLimit)
 	if err != nil {
 		return err
 	}
@@ -199,7 +197,7 @@ func (fct *factory) loadOrCreateSegment(begin, end int64, filePathSet map[string
 	// the worse case, all messages in a dataFile is one byte, one message takes 8 bytes for index
 	// don't worry about the disk usage since init size doesn't occupy real disk storage,
 	// and the index file will be truncated to proper size when close.
-	indexMappedBytes, err := mmap.RWMap(indexFilePath, indexItemSize*fct.dataFileSizeLimit)
+	indexMappedBytes, err := fileutil.RWMap(indexFilePath, indexItemSize*fct.dataFileSizeLimit)
 	if err != nil {
 		return err
 	}
@@ -219,7 +217,7 @@ func (fct *factory) loadOrCreateSegment(begin, end int64, filePathSet map[string
 
 // buildFilePath concatenates the dirPath and fileName as a filePath
 func (fct *factory) buildFilePath(fileName string) string {
-	return fct.dirPath + fileName
+	return path.Join(fct.dirPath, fileName)
 }
 
 // buildIndexAndDataFilePath returns the indexFilePath and dataFilePath for segment with beginSeq.
@@ -256,7 +254,7 @@ func (fct *factory) NewSegment(beginSeq int64) (Segment, error) {
 	}
 
 	fakeSet := map[string]struct{}{
-		fct.dirPath + strconv.FormatInt(beginSeq, 10) + dataFileSuffix: {},
+		fct.buildFilePath(strconv.FormatInt(beginSeq, 10) + dataFileSuffix): {},
 	}
 
 	err := fct.loadOrCreateSegment(beginSeq, beginSeq, fakeSet)
@@ -278,7 +276,7 @@ func (fct *factory) RemoveSegments(ackSeq int64) error {
 	lastSeg := fct.segments[len(fct.segments)-1]
 	if lastSeg.End() <= ackSeq {
 		fct.lock4segments.Unlock()
-		return fmt.Errorf("remove segments with ackSeq(%d) >= the last segment end(%d)", ackSeq, lastSeg.End())
+		return nil
 	}
 
 	index := 0
@@ -299,21 +297,21 @@ func (fct *factory) RemoveSegments(ackSeq int64) error {
 	for _, seg := range ackedSegments {
 
 		fct.logger.Info("remove segment",
-			zap.String("dirPath", fct.dirPath),
-			zap.Int64("begin", seg.Begin()),
-			zap.Int64("end", seg.End()))
+			logger.String("dirPath", fct.dirPath),
+			logger.Int64("begin", seg.Begin()),
+			logger.Int64("end", seg.End()))
 
 		seg.Close()
 
 		indexFilePath, dataFilePath := fct.buildIndexAndDataFilePath(seg.Begin())
-		if util.Exist(indexFilePath) {
+		if fileutil.Exist(indexFilePath) {
 			if err := os.Remove(indexFilePath); err != nil {
-				fct.logger.Error("error rm indexFile:"+indexFilePath, zap.String("dirPath", fct.dirPath), zap.Error(err))
+				fct.logger.Error("error rm indexFile:"+indexFilePath, logger.String("dirPath", fct.dirPath), logger.Error(err))
 			}
 		}
-		if util.Exist(dataFilePath) {
+		if fileutil.Exist(dataFilePath) {
 			if err := os.Remove(dataFilePath); err != nil {
-				fct.logger.Error("error rm indexFile:"+indexFilePath, zap.String("dirPath", fct.dirPath), zap.Error(err))
+				fct.logger.Error("error rm indexFile:"+indexFilePath, logger.String("dirPath", fct.dirPath), logger.Error(err))
 			}
 		}
 	}

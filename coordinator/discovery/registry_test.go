@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eleme/lindb/mock"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/state"
+	"github.com/lindb/lindb/mock"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/state"
 
-	"gopkg.in/check.v1"
+	check "gopkg.in/check.v1"
 )
 
 type testRegistrySuite struct {
@@ -40,11 +40,11 @@ func (ts *testRegistrySuite) TestRegister(c *check.C) {
 	// wait register success
 	time.Sleep(500 * time.Millisecond)
 
-	nodePath := fmt.Sprintf("%s/%s", testRegistryPath, node.String())
+	nodePath := fmt.Sprintf("%s/%s", testRegistryPath, node.Indicator())
 	nodeBytes, _ := repo.Get(context.TODO(), nodePath)
-	nodeInfo := models.Node{}
+	nodeInfo := models.ActiveNode{}
 	_ = json.Unmarshal(nodeBytes, &nodeInfo)
-	c.Assert(node, check.Equals, nodeInfo)
+	c.Assert(node, check.Equals, nodeInfo.Node)
 
 	// test re-register
 	_ = repo.Delete(context.TODO(), nodePath)
@@ -54,7 +54,7 @@ func (ts *testRegistrySuite) TestRegister(c *check.C) {
 	time.Sleep(500 * time.Millisecond)
 	nodeBytes, _ = repo.Get(context.TODO(), nodePath)
 	_ = json.Unmarshal(nodeBytes, &nodeInfo)
-	c.Assert(node, check.Equals, nodeInfo)
+	c.Assert(node, check.Equals, nodeInfo.Node)
 
 	_ = registry.Close()
 	time.Sleep(time.Second)
@@ -80,11 +80,11 @@ func (ts *testRegistrySuite) TestDeregister(c *check.C) {
 	// wait register success
 	time.Sleep(500 * time.Millisecond)
 
-	nodePath := fmt.Sprintf("%s/%s", testRegistryPath, node.String())
+	nodePath := fmt.Sprintf("%s/%s", testRegistryPath, node.Indicator())
 	nodeBytes, _ := repo.Get(context.TODO(), nodePath)
-	nodeInfo := models.Node{}
+	nodeInfo := models.ActiveNode{}
 	_ = json.Unmarshal(nodeBytes, &nodeInfo)
-	c.Assert(node, check.Equals, nodeInfo)
+	c.Assert(node, check.Equals, nodeInfo.Node)
 
 	_ = registry.Deregister(node)
 	time.Sleep(500 * time.Millisecond)

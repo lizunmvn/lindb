@@ -6,12 +6,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/eleme/lindb/pkg/encoding"
-	"github.com/eleme/lindb/pkg/field"
+	"github.com/lindb/lindb/pkg/encoding"
+	"github.com/lindb/lindb/pkg/field"
 )
 
 func TestBlockAlloc(t *testing.T) {
-	bs := newBlockStore(10)
+	bs := newBlockStore(-1)
+	assert.NotNil(t, bs)
+	bs = newBlockStore(10)
 
 	// int block
 	b1 := bs.allocIntBlock()
@@ -86,6 +88,7 @@ func TestReset(t *testing.T) {
 func TestCompactIntBlock(t *testing.T) {
 	bs := newBlockStore(30)
 
+	assert.Nil(t, bs.allocBlock(field.ValueType(999)))
 	// int block
 	b1 := bs.allocBlock(field.Integer)
 	b1.setStartTime(10)

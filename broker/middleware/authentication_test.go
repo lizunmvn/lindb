@@ -3,9 +3,9 @@ package middleware
 import (
 	"testing"
 
-	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/assert"
 
-	"github.com/eleme/lindb/models"
+	"github.com/lindb/lindb/models"
 )
 
 func Test_ParseToken(t *testing.T) {

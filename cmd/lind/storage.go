@@ -4,9 +4,9 @@ import (
 	"fmt"
 	_ "net/http/pprof" // for profiling
 
-	"github.com/eleme/lindb/config"
-	"github.com/eleme/lindb/pkg/util"
-	"github.com/eleme/lindb/storage"
+	"github.com/lindb/lindb/config"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/storage"
 
 	"github.com/spf13/cobra"
 )
@@ -51,7 +51,7 @@ var initializeStorageConfigCmd = &cobra.Command{
 			path = storage.DefaultStorageCfgFile
 		}
 		defaultCfg := config.NewDefaultStorageCfg()
-		return util.EncodeToml(path, &defaultCfg)
+		return fileutil.EncodeToml(path, &defaultCfg)
 	},
 }
 

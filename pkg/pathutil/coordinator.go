@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/eleme/lindb/constants"
+	"github.com/lindb/lindb/constants"
 )
 
 // GetStorageClusterConfigPath returns path which storing config of storage cluster
@@ -30,6 +30,11 @@ func GetDatabaseAssignPath(name string) string {
 // GetNodePath returns node register path
 func GetNodePath(prefix, node string) string {
 	return fmt.Sprintf("%s/%s", prefix, node)
+}
+
+// GetReplicaStatePath returns replica's state path
+func GetReplicaStatePath(node string) string {
+	return fmt.Sprintf("%s/%s", constants.ReplicaStatePath, node)
 }
 
 // GetName returns name, splits path and gets last path

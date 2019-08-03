@@ -4,19 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/eleme/lindb/config"
-	"github.com/eleme/lindb/constants"
-	"github.com/eleme/lindb/coordinator/discovery"
-	task "github.com/eleme/lindb/coordinator/storage"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/server"
-	"github.com/eleme/lindb/pkg/state"
-	"github.com/eleme/lindb/pkg/util"
-	"github.com/eleme/lindb/rpc"
-	"github.com/eleme/lindb/rpc/proto/storage"
-	"github.com/eleme/lindb/service"
-	"github.com/eleme/lindb/storage/handler"
+	"github.com/lindb/lindb/config"
+	"github.com/lindb/lindb/constants"
+	"github.com/lindb/lindb/coordinator/discovery"
+	task "github.com/lindb/lindb/coordinator/storage"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/server"
+	"github.com/lindb/lindb/pkg/state"
+	"github.com/lindb/lindb/pkg/util"
+	"github.com/lindb/lindb/replication"
+	"github.com/lindb/lindb/rpc"
+	"github.com/lindb/lindb/rpc/proto/storage"
+	"github.com/lindb/lindb/service"
+	"github.com/lindb/lindb/storage/handler"
 )
 
 const (
@@ -27,12 +29,14 @@ const (
 
 // srv represents all dependency services
 type srv struct {
-	storageService service.StorageService
+	storageService  service.StorageService
+	sequenceManager replication.SequenceManager
 }
 
 // rpcHandler represents all dependency rpc handlers
 type rpcHandler struct {
 	writer *handler.Writer
+	query  *handler.Query
 }
 
 // runtime represents storage runtime dependency
@@ -73,12 +77,12 @@ func (r *runtime) Run() error {
 	if r.cfgPath == "" {
 		r.cfgPath = DefaultStorageCfgFile
 	}
-	if !util.Exist(r.cfgPath) {
+	if !fileutil.Exist(r.cfgPath) {
 		r.state = server.Failed
 		return fmt.Errorf("config file doesn't exist, see how to initialize the config by `lind storage -h`")
 	}
 	r.config = config.Storage{}
-	if err := util.DecodeToml(r.cfgPath, &r.config); err != nil {
+	if err := fileutil.DecodeToml(r.cfgPath, &r.config); err != nil {
 		r.state = server.Failed
 		return fmt.Errorf("decode config file error:%s", err)
 	}
@@ -90,7 +94,10 @@ func (r *runtime) Run() error {
 	}
 
 	// build service dependency for storage server
-	r.buildServiceDependency()
+	if err := r.buildServiceDependency(); err != nil {
+		r.state = server.Failed
+		return err
+	}
 
 	r.node = models.Node{IP: ip, Port: r.config.Server.Port}
 	// start tcp server
@@ -168,11 +175,17 @@ func (r *runtime) Stop() error {
 }
 
 // buildServiceDependency builds broker service dependency
-func (r *runtime) buildServiceDependency() {
+func (r *runtime) buildServiceDependency() error {
+	sm, err := replication.NewSequenceManager(r.config.Replication.Path)
+	if err != nil {
+		return err
+	}
 	srv := srv{
-		storageService: service.NewStorageService(r.config.Engine),
+		storageService:  service.NewStorageService(r.config.Engine),
+		sequenceManager: sm,
 	}
 	r.srv = srv
+	return nil
 }
 
 // startTCPServer starts tcp server
@@ -191,11 +204,12 @@ func (r *runtime) startTCPServer() {
 
 // bindRPCHandlers binds rpc handlers, registers handler into grpc server
 func (r *runtime) bindRPCHandlers() {
-	//TODO
+
 	r.handler = &rpcHandler{
-		writer: handler.NewWriter(r.srv.storageService),
+		writer: handler.NewWriter(r.srv.storageService, r.srv.sequenceManager),
+		query:  handler.NewQuery(rpc.NewServerStreamFactory()),
 	}
-	//r.handler = handler
 
 	storage.RegisterWriteServiceServer(r.server.GetServer(), r.handler.writer)
+	storage.RegisterQueryServiceServer(r.server.GetServer(), r.handler.query)
 }

@@ -41,7 +41,7 @@ Each shard contains a MemoryDatabase.
 |              | | |   |              | | |
 |              | | |   |              | | |
 |              | | |   |              | | |
-|  SpinLock    | | |   |   SpinLock   | | |
+|              | | |   |   SpinLock   | | |
 +--------------+ | |   +--------------+ | |
   +----|---------+ |     +--------------+ |
     +--|-----------+       +--------------+
@@ -63,7 +63,7 @@ Each shard contains a MemoryDatabase.
     +--------------+
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━Layout of ssTable━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━Layout of metric table━━━━━━━━━━━━━━━━━━━━━━━━
 
                    Level1
                    +---------+---------+---------+---------+---------+---------+
@@ -77,7 +77,7 @@ Each shard contains a MemoryDatabase.
   +-----------+                   +--------------------------+       \                     \     \       \
  /                 Level2                                     \       \                     \     \       \
 v--------+--------+-----------------+--------+--------+--------v       v--------+---+--------v     v-------v
-|  TS    |  TS    |  TS    |  TS    |  TS    | Fields | Footer |       | Offset |...| Offset |     | Metric|
+| Series | Series | Series | Series | Series | Fields | Footer |       | Offset |...| Offset |     | Metric|
 | Entry  | Entry  | Entry  | Offset | Index  |  Meta  |        |       |        |   |        |     | Bitmap|
 +--------+--------+--------+--------+--------+--------+--------+       +--------+---+--------+     +-------+
 |         \                 \       |\        \
@@ -88,7 +88,7 @@ v--------+--------+-----------------+--------+--------+--------v       v--------
 |              +------------------------------------+          \                    \    \         \
 |                  Level3                            \          \                    \    \         \
 v--------+--------+--------+--------+--------+--------v          v--------+---+-------v    v---------v
-| Fields | Data   |  Data  | Data   | Data   |  Data  |          | Offset |...| Offset|    |  TSID   |
+| Fields | Data   |  Data  | Data   | Data   |  Data  |          | Offset |...| Offset|    |seriesID |
 | Info   |        |        |        |        |        |          |        |   |       |    | Bitmap  |
 +--------+--------+--------+--------+--------+--------+          +--------+---+-------+    +---------+
 
@@ -118,25 +118,25 @@ Level1(KV table: Footer)
 
 
 Level2(Fields Meta, Fields Footer)
-┌──────────────────────────────────────────────────────┬───────────────────────────────────────────┐
-│               Fields Meta                            │           Fields Footer                   │
-├──────────┬──────────┬──────────┬──────────┬──────────┼──────────┬──────────┬──────────┬──────────┤
-│StartTime │ EndTime  │ Count    │ FieldID  │ FieldID  │ OffsetOf │ OffsetOf │ OffsetOf │  CRC32   │
-│ (delta)  │ (delta)  │          │ (uint32) │  ......  │ TSOffset │ TSIndex  │FieldsMeta│ Checksum │
-├──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┤
-│ uvariant │ uvariant │ uvariant │ 4 Bytes  │ 4N Bytes │ 4 Bytes  │ 4 Bytes  │ 4 Bytes  │  4 Bytes │
-└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘
+┌─────────────────────────────────────────────────────────────────┬───────────────────────────────────────────┐
+│               Fields Meta                                       │           Fields Footer                   │
+├──────────┬──────────┬──────────┬──────────┬──────────┬──────────┼──────────┬──────────┬──────────┬──────────┤
+│StartTime │ EndTime  │ Count    │ FieldID  │  Field   │          │ OffsetOf │ OffsetOf │ OffsetOf │  CRC32   │
+│ (delta)  │ (delta)  │          │ (uint16) │  Type    │  ......  │ TSOffset │ TSIndex  │FieldsMeta│ Checksum │
+├──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┤
+│ uvariant │ uvariant │ uvariant │ 2 Bytes  │ 1 Byte   │ 3N Bytes │ 4 Bytes  │ 4 Bytes  │ 4 Bytes  │  4 Bytes │
+└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘
 
 Level3(Fields Info, Fields Data)
 ┌─────────────────────────────────────────────────────────────────┬─────────────────────┐
 │               Fields Info                                       │   Fields Data       │
 ├──────────┬──────────┬──────────┬──────────┬──────────┬──────────┼──────────┬──────────┤
-│StartTime │ EndTime  │ Length   │ BitArray │  Data1   │  Data2   │  Data1   │ Data2    │
-│ variant  │ variant  │ variant  │          │  Length  │  Length  │          │          │
+│StartTime │ EndTime  │ BitArray │ BitArray │  Data1   │  Data2   │  Data1   │ Data2    │
+│ (delta)  │ (delta)  │  Length  │          │  Length  │  Length  │          │          │
 ├──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┤
 │ uvariant │ uvariant │ uvariant │ N Bytes  │ uvariant │ uvariant │ N Bytes  │ N Bytes  │
 └──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘
-bit array example(10101001, 0001)
+bit array example(10101001, 1010100110101001)
 
 
 */

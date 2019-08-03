@@ -7,19 +7,19 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/check.v1"
+	check "gopkg.in/check.v1"
 
-	"github.com/eleme/lindb/config"
-	"github.com/eleme/lindb/constants"
-	"github.com/eleme/lindb/coordinator/storage"
-	"github.com/eleme/lindb/mock"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/interval"
-	"github.com/eleme/lindb/pkg/option"
-	"github.com/eleme/lindb/pkg/pathutil"
-	"github.com/eleme/lindb/pkg/state"
-	"github.com/eleme/lindb/pkg/util"
-	"github.com/eleme/lindb/service"
+	"github.com/lindb/lindb/config"
+	"github.com/lindb/lindb/constants"
+	"github.com/lindb/lindb/coordinator/storage"
+	"github.com/lindb/lindb/mock"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/pkg/interval"
+	"github.com/lindb/lindb/pkg/option"
+	"github.com/lindb/lindb/pkg/pathutil"
+	"github.com/lindb/lindb/pkg/state"
+	"github.com/lindb/lindb/service"
 )
 
 var testPath = "test_data"
@@ -38,7 +38,7 @@ func TestAdminStateMachine(t *testing.T) {
 
 func (ts *testAdminStateMachineSuite) TestDatabaseShardAssign(c *check.C) {
 	defer func() {
-		_ = util.RemoveDir(testPath)
+		_ = fileutil.RemoveDir(testPath)
 	}()
 
 	cfg := config.Engine{
@@ -81,7 +81,7 @@ func (ts *testAdminStateMachineSuite) TestDatabaseShardAssign(c *check.C) {
 	}
 	_ = databaseSRV.Save(&dbCfg)
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	shardAssign, err := cluster.GetShardAssign("test")
 	if err != nil {
@@ -97,7 +97,7 @@ func (ts *testAdminStateMachineSuite) TestDatabaseShardAssign(c *check.C) {
 		check.Equals,
 		shardAssign.Config)
 
-	c.Assert(true, check.Equals, util.Exist(filepath.Join(testPath, "test", "shard")))
+	c.Assert(true, check.Equals, fileutil.Exist(filepath.Join(testPath, "test", "shard")))
 }
 
 func (ts *testAdminStateMachineSuite) TestWrongCfg(c *check.C) {
@@ -222,15 +222,15 @@ func (ts *testAdminStateMachineSuite) prepareStorageCluster(repo state.Repositor
 		Config: storage1,
 	})
 	_ = repo.Put(context.TODO(), constants.StorageClusterConfigPath+"/storage1", data1)
-	node1, _ := json.Marshal(models.Node{IP: "127.0.0.1", Port: 2080})
+	node1, _ := json.Marshal(models.ActiveNode{Node: models.Node{IP: "127.0.0.1", Port: 2080}})
 	_ = repo.Put(context.TODO(), constants.ActiveNodesPath+"/node1", node1)
-	node2, _ := json.Marshal(models.Node{IP: "127.0.0.2", Port: 2080})
+	node2, _ := json.Marshal(models.ActiveNode{Node: models.Node{IP: "127.0.0.2", Port: 2080}})
 	_ = repo.Put(context.TODO(), constants.ActiveNodesPath+"/node2", node2)
-	node3, _ := json.Marshal(models.Node{IP: "127.0.0.3", Port: 2080})
+	node3, _ := json.Marshal(models.ActiveNode{Node: models.Node{IP: "127.0.0.3", Port: 2080}})
 	_ = repo.Put(context.TODO(), constants.ActiveNodesPath+"/node3", node3)
-	node4, _ := json.Marshal(models.Node{IP: "127.0.0.4", Port: 2080})
+	node4, _ := json.Marshal(models.ActiveNode{Node: models.Node{IP: "127.0.0.4", Port: 2080}})
 	_ = repo.Put(context.TODO(), constants.ActiveNodesPath+"/node4", node4)
-	node5, _ := json.Marshal(models.Node{IP: "127.0.0.5", Port: 2080})
+	node5, _ := json.Marshal(models.ActiveNode{Node: models.Node{IP: "127.0.0.5", Port: 2080}})
 	_ = repo.Put(context.TODO(), constants.ActiveNodesPath+"/node5", node5)
 
 }

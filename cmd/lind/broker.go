@@ -4,9 +4,9 @@ import (
 	"fmt"
 	_ "net/http/pprof" // for profiling
 
-	"github.com/eleme/lindb/broker"
-	"github.com/eleme/lindb/config"
-	"github.com/eleme/lindb/pkg/util"
+	"github.com/lindb/lindb/broker"
+	"github.com/lindb/lindb/config"
+	"github.com/lindb/lindb/pkg/fileutil"
 
 	"github.com/spf13/cobra"
 )
@@ -50,7 +50,7 @@ var initializeBrokerConfigCmd = &cobra.Command{
 			path = broker.DefaultBrokerCfgFile
 		}
 		defaultCfg := config.NewDefaultBrokerCfg()
-		return util.EncodeToml(path, &defaultCfg)
+		return fileutil.EncodeToml(path, &defaultCfg)
 	},
 }
 

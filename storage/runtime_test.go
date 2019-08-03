@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/check.v1"
+	check "gopkg.in/check.v1"
 
-	"github.com/eleme/lindb/config"
-	"github.com/eleme/lindb/constants"
-	"github.com/eleme/lindb/mock"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/pathutil"
-	"github.com/eleme/lindb/pkg/server"
-	"github.com/eleme/lindb/pkg/state"
-	"github.com/eleme/lindb/pkg/util"
+	"github.com/lindb/lindb/config"
+	"github.com/lindb/lindb/constants"
+	"github.com/lindb/lindb/mock"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/pkg/pathutil"
+	"github.com/lindb/lindb/pkg/server"
+	"github.com/lindb/lindb/pkg/state"
 )
 
 var storageCfgPath = "./storage.toml"
@@ -31,7 +31,7 @@ func TestStorageRuntime(t *testing.T) {
 
 func (ts *testStorageRuntimeSuite) TestStorageRun(c *check.C) {
 	defer func() {
-		_ = util.RemoveDir(storageCfgPath)
+		_ = fileutil.RemoveDir(storageCfgPath)
 	}()
 	// test run fail
 	storage := NewStorageRuntime(storageCfgPath)
@@ -51,8 +51,11 @@ func (ts *testStorageRuntimeSuite) TestStorageRun(c *check.C) {
 			Namespace: "/test/storage",
 			Endpoints: ts.Cluster.Endpoints,
 		},
+		Replication: config.Replication{
+			Path: "/tmp/storage/replication",
+		},
 	}
-	_ = util.EncodeToml(storageCfgPath, &cfg)
+	_ = fileutil.EncodeToml(storageCfgPath, &cfg)
 	storage = NewStorageRuntime(storageCfgPath)
 	err = storage.Run()
 	if err != nil {
@@ -63,15 +66,15 @@ func (ts *testStorageRuntimeSuite) TestStorageRun(c *check.C) {
 	time.Sleep(200 * time.Millisecond)
 
 	runtime, _ := storage.(*runtime)
-	nodePath := pathutil.GetNodePath(constants.ActiveNodesPath, runtime.node.String())
+	nodePath := pathutil.GetNodePath(constants.ActiveNodesPath, runtime.node.Indicator())
 	nodeBytes, err := runtime.repo.Get(context.TODO(), nodePath)
 	if err != nil {
 		c.Fatal(err)
 	}
-	nodeInfo := models.Node{}
+	nodeInfo := models.ActiveNode{}
 	_ = json.Unmarshal(nodeBytes, &nodeInfo)
 
-	c.Assert(runtime.node, check.Equals, nodeInfo)
+	c.Assert(runtime.node, check.Equals, nodeInfo.Node)
 
 	_ = storage.Stop()
 	c.Assert(server.Terminated, check.Equals, storage.State())

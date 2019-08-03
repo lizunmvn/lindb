@@ -3,36 +3,48 @@ package memdb
 import (
 	"fmt"
 
-	"github.com/eleme/lindb/pkg/field"
-	"github.com/eleme/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/encoding"
+	"github.com/lindb/lindb/pkg/field"
+	"github.com/lindb/lindb/pkg/logger"
 )
 
-// segmentStore stores field data based on family start time
-type segmentStore interface {
+//go:generate mockgen -source ./segment_store.go -destination=./segment_store_mock_test.go -package memdb
+
+// sStoreINTF represents segment-store,
+// which abstracts a store for storing field data based on family start time
+type sStoreINTF interface {
+	getFamilyTime() int64
+	slotRange() (startSlot, endSlot int, err error)
 	bytes() (data []byte, startSlot, endSlot int, err error)
-	writeInt(blockStore *blockStore, slotTime int, value int64)
-	writeFloat(blockStore *blockStore, slotTime int, value float64)
+	writeInt(value int64, writeCtx writeContext)
+	writeFloat(value float64, writeCtx writeContext)
 }
 
 // singleFieldStore stores single field
 type simpleFieldStore struct {
-	block   block
-	aggFunc field.AggFunc
+	familyTime int64
+	block      block
+	aggFunc    field.AggFunc
 }
 
 // newSingleFieldStore returns a new segment store for simple field store
-func newSimpleFieldStore(aggFunc field.AggFunc) segmentStore {
+func newSimpleFieldStore(familyTime int64, aggFunc field.AggFunc) sStoreINTF {
 	return &simpleFieldStore{
-		aggFunc: aggFunc,
+		familyTime: familyTime,
+		aggFunc:    aggFunc,
 	}
 }
 
+func (fs *simpleFieldStore) getFamilyTime() int64 {
+	return fs.familyTime
+}
 func (fs *simpleFieldStore) AggFunc() field.AggFunc {
 	//TODO using type????
 	return fs.aggFunc
 }
-func (fs *simpleFieldStore) writeFloat(blockStore *blockStore, slotTime int, value float64) {
-	pos, hasValue := fs.calcTimeWindow(blockStore, slotTime, field.Float)
+
+func (fs *simpleFieldStore) writeFloat(value float64, writeCtx writeContext) {
+	pos, hasValue := fs.calcTimeWindow(writeCtx.blockStore, writeCtx.slotIndex, field.Float)
 	currentBlock := fs.block
 	if hasValue {
 		// do rollup using agg func
@@ -42,8 +54,8 @@ func (fs *simpleFieldStore) writeFloat(blockStore *blockStore, slotTime int, val
 	}
 }
 
-func (fs *simpleFieldStore) writeInt(blockStore *blockStore, slotTime int, value int64) {
-	pos, hasValue := fs.calcTimeWindow(blockStore, slotTime, field.Integer)
+func (fs *simpleFieldStore) writeInt(value int64, writeCtx writeContext) {
+	pos, hasValue := fs.calcTimeWindow(writeCtx.blockStore, writeCtx.slotIndex, field.Integer)
 	currentBlock := fs.block
 	if hasValue {
 		// do rollup using agg func
@@ -67,7 +79,6 @@ func (fs *simpleFieldStore) calcTimeWindow(blockStore *blockStore, slotTime int,
 		currentBlock = blockStore.allocBlock(valueType)
 		currentBlock.setStartTime(slotTime)
 		fs.block = currentBlock
-
 		return 0, false
 	}
 
@@ -105,5 +116,14 @@ func (fs *simpleFieldStore) bytes() (data []byte, startSlot, endSlot int, err er
 		return
 	}
 	data = fs.block.bytes()
+	return
+}
+
+func (fs *simpleFieldStore) slotRange() (startSlot, endSlot int, err error) {
+	if fs.block == nil {
+		err = fmt.Errorf("block is empty")
+		return
+	}
+	startSlot, endSlot = encoding.DecodeTSDTime(fs.block.bytes())
 	return
 }

@@ -3,8 +3,8 @@ package state
 import (
 	"net/http"
 
-	"github.com/eleme/lindb/broker/api"
-	"github.com/eleme/lindb/coordinator/broker"
+	"github.com/lindb/lindb/broker/api"
+	"github.com/lindb/lindb/coordinator/broker"
 )
 
 // StorageAPI represents query storage cluster's state api from broker state machine
@@ -19,8 +19,8 @@ func NewStorageAPI(stateMachine broker.StorageStateMachine) *StorageAPI {
 	}
 }
 
-// List lists state of all storage clusters
-func (s *StorageAPI) List(w http.ResponseWriter, r *http.Request) {
+// ListStorageCluster lists state of all storage clusters
+func (s *StorageAPI) ListStorageCluster(w http.ResponseWriter, r *http.Request) {
 	clusters := s.stateMachine.List()
 	api.OK(w, clusters)
 }

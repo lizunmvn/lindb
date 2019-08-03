@@ -5,10 +5,12 @@ import (
 	"math/bits"
 	"sync"
 
-	"github.com/eleme/lindb/pkg/bit"
-	"github.com/eleme/lindb/pkg/encoding"
-	"github.com/eleme/lindb/pkg/field"
+	"github.com/lindb/lindb/pkg/bit"
+	"github.com/lindb/lindb/pkg/encoding"
+	"github.com/lindb/lindb/pkg/field"
 )
+
+//go:generate mockgen -source ./block_store.go -destination=./block_store_mock_test.go -package memdb
 
 // the longest length of basic-variable on x64 platform
 const maxTimeWindow = 64
@@ -66,21 +68,13 @@ func (bs *blockStore) allocBlock(valueType field.ValueType) block {
 // allocIntBlock alloc int block from pool
 func (bs *blockStore) allocIntBlock() *intBlock {
 	block := bs.intBlockPool.Get()
-	b, ok := block.(*intBlock)
-	if ok {
-		return b
-	}
-	return nil
+	return block.(*intBlock)
 }
 
 // allocIntBlock alloc float block from pool
 func (bs *blockStore) allocFloatBlock() *floatBlock {
 	block := bs.floatBlockPool.Get()
-	b, ok := block.(*floatBlock)
-	if ok {
-		return b
-	}
-	return nil
+	return block.(*floatBlock)
 }
 
 // block represents a fixed size time window of metric data.

@@ -1,6 +1,6 @@
 package constants
 
-import "github.com/eleme/lindb/coordinator/task"
+import "github.com/lindb/lindb/coordinator/task"
 
 // defines common constants will be used in broker and storage
 const (
@@ -18,10 +18,12 @@ const (
 const (
 	// StorageClusterConfigPath represents cluster config store
 	StorageClusterConfigPath = "/storage/cluster/config"
-	// StorageClusterStatePath represents storage cluster state
-	StorageClusterStatePath = "/storage/cluster/state"
 	// DatabaseConfigPath represents database config path
 	DatabaseConfigPath = "/database/config"
+	// StorageClusterStatePath represents storage cluster state
+	StorageClusterStatePath = "/state/storage/cluster"
+	// ReplicaStatePath represents the replica's state
+	ReplicaStatePath = "/state/replica"
 )
 
 // defines all task kinds

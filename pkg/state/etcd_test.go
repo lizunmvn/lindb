@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eleme/lindb/mock"
-	"github.com/eleme/lindb/pkg/util"
+	"github.com/lindb/lindb/mock"
+	"github.com/lindb/lindb/pkg/util"
 
-	"gopkg.in/check.v1"
+	check "gopkg.in/check.v1"
 )
 
 type address struct {
@@ -164,7 +164,7 @@ func (ts *testEtcdRepoSuite) TestWatch(c *check.C) {
 
 	// modify value of key2
 	_ = b.Put(ctx, "/cluster1/controller/2", []byte("222"))
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	cancel()
 	wg.Wait()
 

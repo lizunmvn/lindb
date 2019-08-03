@@ -7,21 +7,26 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/eleme/lindb/broker/api"
-	"github.com/eleme/lindb/broker/api/admin"
-	apiState "github.com/eleme/lindb/broker/api/state"
-	"github.com/eleme/lindb/broker/middleware"
-	"github.com/eleme/lindb/config"
-	"github.com/eleme/lindb/constants"
-	"github.com/eleme/lindb/coordinator"
-	"github.com/eleme/lindb/coordinator/broker"
-	"github.com/eleme/lindb/coordinator/discovery"
-	"github.com/eleme/lindb/models"
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/server"
-	"github.com/eleme/lindb/pkg/state"
-	"github.com/eleme/lindb/pkg/util"
-	"github.com/eleme/lindb/service"
+	"github.com/lindb/lindb/broker/api"
+	"github.com/lindb/lindb/broker/api/admin"
+	stateAPI "github.com/lindb/lindb/broker/api/state"
+	"github.com/lindb/lindb/broker/handler"
+	"github.com/lindb/lindb/broker/middleware"
+	"github.com/lindb/lindb/config"
+	"github.com/lindb/lindb/constants"
+	"github.com/lindb/lindb/coordinator"
+	"github.com/lindb/lindb/coordinator/broker"
+	"github.com/lindb/lindb/coordinator/discovery"
+	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/pkg/logger"
+	"github.com/lindb/lindb/pkg/server"
+	"github.com/lindb/lindb/pkg/state"
+	"github.com/lindb/lindb/pkg/util"
+	"github.com/lindb/lindb/replication"
+	"github.com/lindb/lindb/rpc"
+	brokerpb "github.com/lindb/lindb/rpc/proto/broker"
+	"github.com/lindb/lindb/service"
 )
 
 const (
@@ -34,6 +39,7 @@ const (
 type srv struct {
 	storageClusterService service.StorageClusterService
 	databaseService       service.DatabaseService
+	channelManager        replication.ChannelManager
 }
 
 // apiHandler represents all api handlers for broker
@@ -41,12 +47,18 @@ type apiHandler struct {
 	storageClusterAPI *admin.StorageClusterAPI
 	databaseAPI       *admin.DatabaseAPI
 	loginAPI          *api.LoginAPI
-	storageStateAPI   *apiState.StorageAPI
+	storageStateAPI   *stateAPI.StorageAPI
+	brokerStateAPI    *stateAPI.BrokerAPI
+}
+
+type rpcHandler struct {
+	writer *handler.Writer
 }
 
 // stateMachine represents all state machines for broker
 type stateMachine struct {
 	storageState broker.StorageStateMachine
+	nodeState    broker.NodeStateMachine
 }
 
 type middlewareHandler struct {
@@ -66,6 +78,9 @@ type runtime struct {
 	master       coordinator.Master
 	registry     discovery.Registry
 	stateMachine *stateMachine
+
+	server  rpc.TCPServer
+	handler *rpcHandler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -90,13 +105,13 @@ func (r *runtime) Run() error {
 	if r.cfgPath == "" {
 		r.cfgPath = DefaultBrokerCfgFile
 	}
-	if !util.Exist(r.cfgPath) {
+	if !fileutil.Exist(r.cfgPath) {
 		r.state = server.Failed
 		return fmt.Errorf("config file doesn't exist, see how to initialize the config by `lind broker -h`")
 	}
 
 	r.config = config.Broker{}
-	if err := util.DecodeToml(r.cfgPath, &r.config); err != nil {
+	if err := fileutil.DecodeToml(r.cfgPath, &r.config); err != nil {
 		r.state = server.Failed
 		return fmt.Errorf("decode config file error:%s", err)
 	}
@@ -125,6 +140,9 @@ func (r *runtime) Run() error {
 
 	r.buildMiddlewareDependency()
 	r.buildAPIDependency()
+
+	// start tcp server
+	r.startTCPServer()
 
 	// start http server
 	r.startHTTPServer()
@@ -178,6 +196,12 @@ func (r *runtime) Stop() error {
 		}
 	}
 
+	// finally shutdown rpc server
+	if r.server != nil {
+		r.log.Info("stopping grpc server")
+		r.server.Stop()
+	}
+
 	r.log.Info("broker server stop complete")
 	r.state = server.Terminated
 	return nil
@@ -218,9 +242,14 @@ func (r *runtime) startStateRepo() error {
 
 // buildServiceDependency builds broker service dependency
 func (r *runtime) buildServiceDependency() {
+	// todo watch stateMachine states change.
+	// hard code create channel first.
+	cm := replication.NewChannelManager(r.config.ReplicationChannel, rpc.NewClientStreamFactory(r.node))
+
 	srv := srv{
 		storageClusterService: service.NewStorageClusterService(r.repo),
 		databaseService:       service.NewDatabaseService(r.repo),
+		channelManager:        cm,
 	}
 	r.srv = srv
 }
@@ -231,7 +260,8 @@ func (r *runtime) buildAPIDependency() {
 		storageClusterAPI: admin.NewStorageClusterAPI(r.srv.storageClusterService),
 		databaseAPI:       admin.NewDatabaseAPI(r.srv.databaseService),
 		loginAPI:          api.NewLoginAPI(r.config.User),
-		storageStateAPI:   apiState.NewStorageAPI(r.stateMachine.storageState),
+		storageStateAPI:   stateAPI.NewStorageAPI(r.stateMachine.storageState),
+		brokerStateAPI:    stateAPI.NewBrokerAPI(r.stateMachine.nodeState),
 	}
 
 	api.AddRoutes("Login", http.MethodPost, "/login", handler.loginAPI.Login)
@@ -245,7 +275,8 @@ func (r *runtime) buildAPIDependency() {
 	api.AddRoutes("CreateOrUpdateDatabase", http.MethodPost, "/database", handler.databaseAPI.Save)
 	api.AddRoutes("GetDatabase", http.MethodGet, "/database", handler.databaseAPI.GetByName)
 
-	api.AddRoutes("ListStorageClusterState", http.MethodGet, "/storage/state/list", handler.storageStateAPI.List)
+	api.AddRoutes("ListStorageClusterState", http.MethodGet, "/storage/state/list", handler.storageStateAPI.ListStorageCluster)
+	api.AddRoutes("ListBrokerNodesState", http.MethodGet, "/broker/node/state", handler.brokerStateAPI.ListBrokerNodes)
 }
 
 // buildMiddlewareDependency builds middleware dependency
@@ -270,6 +301,12 @@ func (r *runtime) startStateMachine() error {
 	}
 	r.stateMachine.storageState = storageStateMachine
 
+	nodeStateMachine, err := broker.NewNodeStateMachine(r.ctx, r.repo)
+	if err != nil {
+		return err
+	}
+	r.stateMachine.nodeState = nodeStateMachine
+
 	return nil
 }
 
@@ -280,4 +317,32 @@ func (r *runtime) stopStateMachine() {
 			r.log.Error("close storage state state machine error", logger.Error(err))
 		}
 	}
+	if r.stateMachine.nodeState != nil {
+		if err := r.stateMachine.nodeState.Close(); err != nil {
+			r.log.Error("close node state state machine error", logger.Error(err))
+		}
+	}
+}
+
+func (r *runtime) startTCPServer() {
+	r.server = rpc.NewTCPServer(fmt.Sprintf(":%d", r.config.Server.Port))
+
+	// bind rpc handlers
+	r.bindRPCHandlers()
+
+	go func() {
+		if err := r.server.Start(); err != nil {
+			panic(err)
+		}
+	}()
+}
+
+// bindRPCHandlers binds rpc handlers, registers handler into grpc server
+func (r *runtime) bindRPCHandlers() {
+
+	r.handler = &rpcHandler{
+		writer: handler.NewWriter(r.srv.channelManager),
+	}
+
+	brokerpb.RegisterBrokerServiceServer(r.server.GetServer(), r.handler.writer)
 }

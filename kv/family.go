@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/eleme/lindb/kv/table"
-	"github.com/eleme/lindb/kv/version"
-	"github.com/eleme/lindb/pkg/logger"
-	"github.com/eleme/lindb/pkg/util"
+	"github.com/lindb/lindb/kv/table"
+	"github.com/lindb/lindb/kv/version"
+	"github.com/lindb/lindb/pkg/fileutil"
+	"github.com/lindb/lindb/pkg/logger"
 )
 
 // Family implements column family for data isolation each family.
@@ -39,8 +39,8 @@ func newFamily(store *store, option FamilyOption) (Family, error) {
 	familyPath := filepath.Join(store.option.Path, name)
 	log := logger.GetLogger(fmt.Sprintf("kv/famliy[%s]", familyPath))
 
-	if !util.Exist(familyPath) {
-		if err := util.MkDir(familyPath); err != nil {
+	if !fileutil.Exist(familyPath) {
+		if err := fileutil.MkDir(familyPath); err != nil {
 			return nil, fmt.Errorf("mkdir family path error:%s", err)
 		}
 	}
