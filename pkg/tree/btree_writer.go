@@ -196,6 +196,8 @@ func (w *Writer) serializeLeafNode(currentHigh int, dType *d, leafCommonPrefix [
 			dataWriter.PutLenBytes(pair.k.([]byte))
 			//write value
 			dataWriter.PutUvarint64(uint64(pair.v.(int)))
+			//todo PrefixKeyDelta 
+			// delta of previous key
 		}
 	}
 	//write leaf node count
